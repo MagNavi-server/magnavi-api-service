@@ -278,10 +278,23 @@ class PlaceApiIntegrationTests {
                         .andExpect(status().isForbidden());
             }
         }
-        for (String path : List.of("/places/search", "/locations/1/mappings", "/buildings/1/admin", "/actuator/env")) {
+        for (String path : List.of("/locations/1/mappings", "/buildings/1/admin", "/actuator/env")) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         }
+    }
+
+    /** 네이버 키가 없는 기본 설정에서도 서버와 실내 조회는 유지하고 검색만 준비 중으로 응답한다. */
+    @Test
+    void keepsNaverSearchUnavailableUntilConfigured() throws Exception {
+        var member = new com.example.magnavi_springserver.member.domain.Member("검색 설정 테스트", null, null);
+        entityManager.persist(member);
+        entityManager.flush();
+        mvc.perform(get("/places/search").param("query", "카페")
+                        .header("Authorization", "Bearer " + tokens.issueAccessToken(member.getId())))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("PLACE_SEARCH_NOT_CONFIGURED"));
+        mvc.perform(get("/buildings")).andExpect(status().isOk());
     }
 
     /** 공개 조회는 토큰 없이도 되지만 잘못된 Bearer 헤더를 보내면 기존 인증 정책대로 거절한다. */

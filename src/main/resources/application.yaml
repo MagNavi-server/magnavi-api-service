@@ -1,3 +1,50 @@
 spring:
   application:
     name: MagNavi_SpringServer
+  # 임시 기본 계정 대신 명시적인 보안 정책을 사용한다. JWT 인증은 회원 단계에서 연결한다.
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+      initialization-fail-timeout: 5000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    clean-disabled: true
+    baseline-on-migrate: false
+  sql:
+    init:
+      mode: never
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+
+logging:
+  pattern:
+    level: '%5p [traceId:%X{traceId:-}]'

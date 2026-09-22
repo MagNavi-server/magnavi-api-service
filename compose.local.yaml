@@ -1,0 +1,26 @@
+# 개발 전용 MySQL이다. 운영 배포용 Compose 구성은 별도로 결정한다.
+name: magnavi-api-local
+
+services:
+  mysql:
+    image: mysql:8.4.8
+    environment:
+      MYSQL_DATABASE: magnavi_local
+      MYSQL_USER: magnavi
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD를 설정하세요}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${MAGNAVI_MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # 프로세스 생존뿐 아니라 애플리케이션 계정의 실제 쿼리 성공을 확인한다.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=\"$${MYSQL_USER}\" --database=\"$${MYSQL_DATABASE}\" --execute='SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  mysql-data:

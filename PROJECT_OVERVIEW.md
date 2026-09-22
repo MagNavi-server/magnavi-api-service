@@ -1,14 +1,16 @@
 # MagNavi API Service — 프로젝트 개요
 
-작성일: 2026-09-10
+작성일: 2026-09-10 · Git 규칙 정리일: 2026-09-18 · 기반 구현일: 2026-09-18
 
 이 문서는 `magnavi-api-service`가 담당할 기능, 현재 생성된 Spring 프로젝트와 목표 구조를 설명한다. 상세 작업은 [Spring 구현 계획](IMPLEMENTATION_PLAN.md)을 참고한다.
 
 각 모듈의 역할과 처리 흐름은 [모듈별 안내서](docs/modules/README.md)에서 설명한다. 테이블·컬럼·관계·저장 정책의 상세 기준은 [DB 스키마 설계](DATABASE_SCHEMA.md)다.
 
+개발 작업의 공통 기준은 [커밋 컨벤션](docs/convention/commit-convention.md)과 [브랜치·PR·배포 규칙](docs/convention/branch-convention.md)을 따른다.
+
 이번 설계에는 기존 일반 로그인 유지안, 카카오·구글 로그인, 네이버 지역 검색을 반영했다. 외부 검색 결과의 저장과 자체 실외 장소 관리는 조건부 항목이다.
 
-현재 상태는 소스 정적 확인 기준이다. 아래 회원·장소·즐겨찾기·실시간 기능은 구현 목표이며, 이 Spring 프로젝트에 이미 구현된 기능을 의미하지 않는다.
+현재는 실행·테스트 기반을 구현했다. 아래 회원·장소·즐겨찾기·실시간 기능은 구현 목표이며 아직 업무 기능은 동작하지 않는다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
 
 ## 1. 이 서버는 어떤 역할인가?
 
@@ -38,25 +40,31 @@ MagNavi_SpringServer/
 ├── settings.gradle
 ├── gradlew / gradlew.bat
 ├── gradle/wrapper/
+├── compose.local.yaml    # 개발용 MySQL, 로컬 포트·볼륨·쿼리 healthcheck
+├── .env.example          # 값 없는 개발 환경변수 예시
 ├── src/main/java/com/example/magnavi_springserver/
 │   ├── MagNaviSpringServerApplication.java
 │   ├── member/            # 4개 계층의 빈 클래스
 │   ├── place/             # 4개 계층의 빈 클래스
 │   ├── favorite/          # 4개 계층의 빈 클래스
 │   ├── positioning/       # 4개 계층의 빈 클래스
-│   ├── shared/            # 오류·인증 정보·추적 지원의 빈 클래스
-│   └── config/            # 어노테이션 없는 설정 클래스 골격
+│   ├── shared/            # 공통 오류·요청 추적 구현, 인증 정보는 빈 골격
+│   └── config/            # 기본 보안 구현, WebSocket·gRPC 설정은 빈 골격
 ├── src/main/resources/
 │   ├── application.yaml
+│   ├── application-local.yaml
+│   ├── application-prod.yaml
 │   └── db/migration/      # 빈 폴더, SQL 없음
 ├── src/test/java/com/example/magnavi_springserver/
-│   ├── MagNaviSpringServerApplicationTests.java
+│   ├── MagNaviSpringServerApplicationTests.java # 격리 MySQL·상태·접근 정책
+│   ├── support/           # Testcontainers MySQL 설정
 │   ├── member/            # 이하 모듈별 테스트 폴더는 비어 있음
 │   ├── place/
 │   ├── favorite/
 │   ├── positioning/
-│   ├── shared/
+│   ├── shared/            # 오류·추적 테스트
 │   └── config/
+├── src/test/resources/application-test.yaml
 ├── PROJECT_OVERVIEW.md
 ├── IMPLEMENTATION_PLAN.md
 ├── DATABASE_SCHEMA.md     # 테이블·관계·제약·저장·이관 정책
@@ -69,9 +77,11 @@ MagNavi_SpringServer/
     └── SHARED.md          # 최소 공통 지원 영역
 ```
 
-기존 Java 시작 클래스와 기본 `contextLoads()` 테스트를 유지하고, 모듈별 빈 클래스 39개를 추가했다. 새 파일에는 package·역할 주석·빈 클래스 선언만 있으며 필드·생성자·메서드·어노테이션은 없다. 따라서 API·JPA 엔티티 매핑·외부 호출·보안 설정이 동작하는 상태는 아니다.
+초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 회원·장소·즐겨찾기·실시간 업무 클래스, `AuthenticatedMember`, WebSocket·gRPC 설정은 여전히 빈 골격이다.
 
-`application.yaml`과 의존성은 변경하지 않았다. Repository 등 인터페이스, SQL·테스트 구현, gRPC 계약은 아직 만들지 않았다. 테스트와 마이그레이션의 빈 폴더에는 .gitkeep도 두지 않았으므로 파일이 생기기 전에는 Git으로 추적되지 않는다.
+공통·local·test·prod 설정과 개발용 MySQL Compose, Testcontainers 테스트를 추가했다. 기본 테스트는 MySQL 연결·상태 확인·접근 정책을 검증하도록 바꿨고 오류 변환·동시 요청 추적 테스트를 추가했다. JPA는 `validate`, 스키마 변경은 Flyway 기준이다. 업무 엔티티와 SQL이 없어 실제 테이블·제약 검증은 2단계에 남아 있다.
+
+현재 공개한 경로는 생존·준비 상태 확인 GET 두 개뿐이다. 나머지는 기본 거절하고 임시 로그인 사용자·세션·JWT 발급 및 검증을 제공하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. 운영 배포용 이미지·Compose·CI/CD는 구현 전이다.
 
 ### 2.1 선언된 기술과 의존성
 
@@ -90,10 +100,11 @@ MagNavi_SpringServer/
 | protobuf Gradle 플러그인 | 계약으로부터 통신 코드 생성 기반 |
 | Actuator | 상태 확인과 운영 정보 |
 | Lombok·테스트 의존성 | 코드 작성 보조와 검증 |
+| Spring Boot Testcontainers·MySQL 모듈 | 운영 설정과 분리한 실제 MySQL 통합 테스트 |
 
 소셜 로그인 방식에 따라 OAuth2 Client 등 추가 의존성을 검토한다. 현재 Resource Server 의존성만으로 카카오·구글 가입·계정 연결이 완성되지는 않는다.
 
-의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 특히 로그인·JWT 발급, WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 별도 구현이 필요하다. 선언된 버전의 실제 빌드·기동 호환성은 구현 단계에서 확인한다.
+의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 특히 로그인·JWT 발급, WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 별도 구현이 필요하다. Java 21에서 전체 Gradle 빌드와 기반 테스트 19개를 통과했다. 이 검증은 아직 없는 계약 생성이나 실제 모델 연동을 포함하지 않는다.
 
 ## 3. 제공할 기능
 
@@ -200,7 +211,9 @@ Spring이 보내는 것은 세션 정보와 순서가 있는 센서 메시지다
 - 개인 포크: `ychoik/magnavi-api-service`.
 - 로컬 `origin`: 개인 포크.
 - 로컬 `upstream`: 중앙 레포.
-- 작업 흐름: 중앙 develop 기준 작업 브랜치 → 개인 포크 push → 중앙 develop PR.
-- 배포 방향: develop → release → 검증한 안정 버전을 main에 반영.
+- 기본 브랜치: `develop`.
+- 작업 흐름: 중앙 이슈 생성 → 최신 develop 기준 이슈 번호 포함 작업 브랜치 → 개인 포크 push → 중앙 develop PR.
+- 작업 PR은 Squash and merge, 공용 브랜치 간 PR은 Create a merge commit을 사용한다. 개인 작업 브랜치는 보존한다.
+- 배포 방향: develop → release PR에서 CI → release 반영 후 GitHub Actions 검증·빌드·배포 → 정상 배포한 버전을 main에 PR로 반영.
 
 중앙의 main·develop·release 보호 규칙과 필수 승인 0명은 운영할 정책이다. 실제 저장·활성화 여부는 별도로 확인한다. 문서 생성만으로 브랜치나 CI/CD 설정이 적용되는 것은 아니다.

@@ -1,6 +1,6 @@
 # shared — 최소 공통 지원 영역
 
-작성일: 2026-09-10 · 상태: 구현 예정 설계
+작성일: 2026-09-10 · 갱신일: 2026-09-18 · 상태: 공통 오류·HTTP 추적 구현, 나머지는 설계
 
 [전체 모듈 안내](README.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 
@@ -59,13 +59,14 @@ favorite의 중복 판단
   → 앱의 일관된 오류 표시
 ```
 
-아래는 아직 확정되지 않은 응답 예시다.
+현재 공통 응답은 `code`, `message`, `traceId`, `errors`를 사용한다. 아래 즐겨찾기 업무 코드는 후속 구현 예시이며 아직 등록한 코드가 아니다.
 
 ```json
 {
   "code": "FAVORITE_DUPLICATE",
   "message": "이미 등록한 즐겨찾기입니다.",
-  "traceId": "example-request-123"
+  "traceId": "example-request-123",
+  "errors": []
 }
 ```
 
@@ -74,6 +75,7 @@ favorite의 중복 판단
 | code | 앱이 오류 종류를 구분하는 안정적인 값 |
 | message | 사람이 이해할 안내 문구 |
 | traceId | 운영자가 해당 요청의 문제를 찾기 위한 식별자 |
+| errors | 검증 실패 필드와 안내 목록, 없으면 빈 배열 |
 
 traceId에 회원 ID나 위치를 그대로 넣지 않는다. 오류 메시지에 SQL·스택 트레이스·토큰도 포함하지 않는다.
 
@@ -83,7 +85,9 @@ traceId에 회원 ID나 위치를 그대로 넣지 않는다. 오류 메시지�
 
 전부 그렇지는 않다. Spring Security는 Controller에 도착하기 전에 요청을 거절할 수 있다.
 
-따라서 일반 Controller 예외 처리뿐 아니라 인증 실패 처리기와 접근 거절 처리기도 같은 응답 규격을 사용하도록 연결한다. 예시 이름은 `AuthenticationEntryPoint`와 `AccessDeniedHandler`이며, 실제 연결 방법은 보안 설정에서 구현한다.
+현재 `GlobalExceptionHandler`가 MVC 오류를, `SecurityErrorResponseWriter`가 보안 필터 오류를 같은 규격으로 변환한다. `SecurityConfig`에서 `AuthenticationEntryPoint`와 `AccessDeniedHandler`를 연결했다. 컨테이너의 내부 `/error` 처리는 `ApiErrorController`가 담당한다.
+
+MVC의 400·404·405·415 같은 상태와 필요한 헤더를 유지하고 예외 상세는 공개하지 않는다. Bean Validation 실패는 필드명과 안전한 안내만 반환한다. 상태 확인 GET 두 개만 공개하며, 업무 경로는 기본 거절 상태다. JWT와 회원 인증은 아직 구현하지 않았다.
 
 ### 4.2 WebSocket 오류도 HTTP 응답으로 보내는가?
 
@@ -143,6 +147,8 @@ shared의 인증 정보 객체 자체가 토큰을 검증하는 것은 아니다
 
 공통 마스킹 규칙이 있어도 각 모듈에서 센서 DTO나 토큰 객체 전체를 출력하면 노출될 수 있다. 로그를 남기는 각 지점도 함께 검토해야 한다.
 
+현재 `RequestTraceFilter`는 보안 필터보다 먼저 서버 UUID를 만들고 `X-Request-ID` 헤더·오류 JSON·로그에 연결한다. 요청에서 들어온 추적 헤더는 사용하지 않는다. 요청 로그에는 상태와 처리 시간만 남기고 요청이 끝나면 MDC(현재 스레드의 로그 부가 정보)를 정리하거나 이전 값으로 복원한다. 성공·실패·동시 실행의 정보 분리를 테스트했으며, 비동기 WebSocket·gRPC로의 추적 전달은 후속 구현 범위다.
+
 DB 비밀번호와 JWT 키는 소스나 문서에 실제 값으로 적지 않는다. 환경 설정으로 주입하고, 필요한 값이 없으면 안전하게 실패하도록 설계한다. 환경 설정의 조립과 Actuator 공개 범위는 애플리케이션 운영 설정에서 관리한다.
 
 ## 8. 시간과 공통 도구는 왜 필요한가?
@@ -165,7 +171,7 @@ config/             # 루트의 조립 지점; shared 내부가 아님
 └── ...             # 보안·WebSocket·외부 설정 연결
 ```
 
-현재 error/ErrorResponse, security/AuthenticatedMember, observability/TraceIdGenerator와 루트 config의 설정 클래스는 빈 골격으로 생성했다. package·역할 주석·빈 선언만 있으며 실제 오류 응답·인증 정보·식별자 생성·설정 기능은 아직 없다. 나머지 공통 도구는 필요할 때 추가한다.
+현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. AuthenticatedMember와 WebSocket·gRPC 설정은 빈 골격이며 나머지 공통 도구는 필요할 때 추가한다.
 
 회원·장소 엔티티를 같은 베이스 엔티티에 억지로 맞추는 것도 필수 사항이 아니다. 생성·수정 시각처럼 정말 같은 의미의 공통 항목인지부터 판단한다.
 
@@ -180,7 +186,7 @@ shared는 별도의 업무 테이블을 소유하지 않는다. 일반 인증·�
 ## 11. 완료 확인
 
 - [ ] shared가 업무 모듈의 내부 코드·Repository에 의존하지 않는다.
-- [ ] 일반 REST 오류와 보안 계층 오류가 합의한 응답 형식을 사용한다.
+- [x] 일반 REST 오류와 보안 계층 오류가 같은 응답 형식을 사용한다.
 - [ ] WebSocket 오류는 positioning의 계약으로 전달된다.
 - [ ] 오류·로그에 비밀정보나 센서 원본·위치 이력이 남지 않는다.
 - [ ] 업무별 검증·권한·트랜잭션 규칙이 소유 모듈에 남아 있다.

@@ -157,6 +157,8 @@ DB 비밀번호와 JWT 키는 소스나 문서에 실제 값으로 적지 않는
 
 Java의 `Clock` 같은 시각 제공 도구를 활용할 수 있다. 도구는 공용일 수 있지만 “몇 분 후 만료하는가?”라는 업무 정책은 member나 positioning이 소유한다.
 
+2단계에서는 모든 업무 행의 같은 의미인 생성·수정 시각만 `AuditedEntity`로 공통화했다. Java `Instant`를 UTC·마이크로초 정밀도로 저장하고, 생성 시각은 갱신하지 않는다. `GeneratedIdEntity`는 자동 증가 ID를 쓰는 7개 엔티티가 공유하고 일반 인증은 회원 ID를 직접 사용한다. `DomainValues`는 존재·문자 수·양수 ID 같은 최소 검사를 제공하며 로그인·즐겨찾기 정책은 각 도메인에 둔다.
+
 같은 이유로 페이지 응답이나 추적 ID 도구도 공통으로 사용할 수 있다. 다만 실제 기능에서 같은 의미로 사용되는 것이 확인된 뒤 공통화한다.
 
 ## 9. 초기 폴더 구성 예시
@@ -165,13 +167,15 @@ Java의 `Clock` 같은 시각 제공 도구를 활용할 수 있다. 도구는 �
 shared/
 ├── error/          # 공통 오류 계약·응답 표현
 ├── security/       # 최소 인증 정보 표현, 필요한 경우
-└── observability/  # 공통 추적·마스킹 도구, 필요한 경우
+├── observability/  # 요청 추적
+├── persistence/    # 생성·수정 시각·자동 증가 ID 매핑
+└── validation/     # 공통 값의 존재·길이·양수 검사
 
 config/             # 루트의 조립 지점; shared 내부가 아님
 └── ...             # 보안·WebSocket·외부 설정 연결
 ```
 
-현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. AuthenticatedMember와 WebSocket·gRPC 설정은 빈 골격이며 나머지 공통 도구는 필요할 때 추가한다.
+현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. 2단계에서 persistence·validation의 최소 공통 지원을 추가했다. AuthenticatedMember와 WebSocket·gRPC 설정은 빈 골격이며 추가 공통 도구는 실제 필요에 따라 구현한다.
 
 회원·장소 엔티티를 같은 베이스 엔티티에 억지로 맞추는 것도 필수 사항이 아니다. 생성·수정 시각처럼 정말 같은 의미의 공통 항목인지부터 판단한다.
 

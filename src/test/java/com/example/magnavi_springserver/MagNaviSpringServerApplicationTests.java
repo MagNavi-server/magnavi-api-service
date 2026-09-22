@@ -43,13 +43,13 @@ class MagNaviSpringServerApplicationTests {
     @Autowired
     private ApplicationContext context;
 
-    /** 운영 DB 대신 임시 DB에 연결했고 업무 SQL 추가 전의 Flyway 설정이 준비됐는지 확인한다. */
+    /** 운영 DB 대신 임시 DB에 연결했고 Flyway의 세 버전과 JPA 구조 검증이 완료됐는지 확인한다. */
     @Test
     void connectsToIsolatedMySqlWithFlywayReady() {
         assertThat(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("SELECT DATABASE()", String.class)).isEqualTo("magnavi_test");
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(flyway.info().applied()).isEmpty();
+        assertThat(flyway.info().applied()).hasSize(3);
         assertThat(flyway.getConfiguration().isCleanDisabled()).isTrue();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(context.getEnvironment().getProperty("spring.jpa.open-in-view")).isEqualTo("false");

@@ -1,10 +1,10 @@
 # MagNavi API Service — 데이터베이스 스키마 설계
 
-작성일·검토일: 2026-09-10 · 상태: 구현 전 설계 초안
+최초 작성일: 2026-09-10 · 구현 반영일: 2026-09-20 · 상태: 2단계 DB 기반 로컬 구현·격리 검증 완료
 
 [프로젝트 개요](PROJECT_OVERVIEW.md) · [구현 계획](IMPLEMENTATION_PLAN.md) · [모듈 안내](docs/modules/README.md)
 
-이 문서는 Spring 서버가 무엇을 저장하고, 테이블을 어떻게 연결하며, 어떤 규칙으로 데이터를 보호할지 설명한다. 테이블·컬럼·자료형은 제안이며 실제 DB에 생성된 상태가 아니다. 이 문서가 스키마 상세의 기준이고, 구현 순서와 기능 흐름은 연결된 문서에서 관리한다.
+이 문서는 Spring 서버가 무엇을 저장하고, 테이블을 어떻게 연결하며, 어떤 규칙으로 데이터를 보호할지 설명한다. 기본 8개 테이블은 Flyway SQL과 JPA 엔티티·저장소로 구현했고 격리 MySQL에서 생성·검증했다. 기존 개발/운영 DB에 적용한 상태는 아니며, 선택 기능·업무 API·데이터 이관은 후속 계획으로 구분한다. 이 문서가 스키마 상세의 기준이고, 구현 순서와 기능 흐름은 연결된 문서에서 관리한다.
 
 ## 1. 이번 설계의 전제
 
@@ -17,6 +17,14 @@
 - 외부 검색 결과의 캐시·즐겨찾기 저장 허용 범위는 아직 미확정이다.
 
 계정 연결, 재발급 토큰, 탈퇴, 자체 실외 장소 관리는 아래에서 제안·선택 사항으로 구분한다. 문서에 등장한다고 전부 초기 필수 기능으로 확정된 것은 아니다.
+
+### 1.1 2단계에서 확정한 범위
+
+- 새 빈 DB의 테이블 구조부터 구현한다. 기존 FastAPI DB의 데이터는 그대로 보존하고 실제 이관은 후속 작업으로 결정한다.
+- 일반 로그인 ID는 `String.strip()`으로 앞뒤 공백을 제거하고 대소문자를 구분한다. `Alice`와 `alice`는 다른 ID이며 저장·조회 모두 같은 공백 정리를 사용한다.
+- 이메일·전화번호는 선택값이다. 이메일 중복을 허용하고 이메일만으로 회원을 합치지 않는다.
+- [V1 회원 SQL](src/main/resources/db/migration/V1__create_member_tables.sql), [V2 장소 SQL](src/main/resources/db/migration/V2__create_indoor_place_tables.sql), [V3 즐겨찾기 SQL](src/main/resources/db/migration/V3__create_favorites.sql)이 실제 테이블·인덱스·제약의 기준이다.
+- 각 모듈의 `domain`에 8개 JPA 엔티티, `infrastructure/persistence`에 8개 저장소를 구현했다. 모듈 간 참조는 다른 모듈의 엔티티 객체 대신 ID로 표현하고 DB FK로 보호한다. 기존 PersistenceAdapter와 업무 API·서비스는 다음 단계에서 연결한다.
 
 ## 2. 먼저 알아둘 용어
 
@@ -38,17 +46,17 @@
 | 구분 | 테이블 | 소유 모듈 | 역할 |
 |---|---|---|---|
 | 기본 | `members` | member | MagNavi 회원 자체 |
-| 일반 로그인 유지 시 | `local_credentials` | member | 로그인 ID·비밀번호 해시 |
+| 기본 | `local_credentials` | member | 로그인 ID·비밀번호 해시 |
 | 기본 | `social_accounts` | member | 카카오·구글 계정과 회원 연결 |
 | 기본 | `buildings` | place | 건물 |
 | 기본 | `floors` | place | 건물 안의 층 |
 | 기본 | `indoor_locations` | place | 실내 장소 기준 정보 |
-| 기본 제안 | `model_location_mappings` | place | 모델 출력 코드와 실내 장소 연결 |
+| 기본 | `model_location_mappings` | place | 모델 출력 코드와 실내 장소 연결 |
 | 기본 | `favorites` | favorite | 회원별 저장 대상 |
 | 선택 | `outdoor_places` | place | 우리가 직접 관리하는 실외 장소 |
 | 선택 | `place_facilities` | place | 자체 실외 장소의 여러 시설 |
 
-일반 로그인을 포함한 기본안은 8개 업무 테이블이다. 선택 테이블과 Flyway 자체 이력 테이블은 이 개수에 포함하지 않는다. 외부 장소 즐겨찾기 관련 컬럼은 저장 정책 확정 후 적용한다.
+일반 로그인을 포함해 구현한 업무 테이블은 8개다. 선택 테이블과 Flyway 자체 이력 테이블은 이 개수에 포함하지 않는다. 외부 장소 즐겨찾기 관련 컬럼은 저장 정책 확정 후 적용한다.
 
 ```text
 members 1 ── 0..1 local_credentials
@@ -69,14 +77,14 @@ FK가 모듈 사이를 연결해도 데이터 수정 책임이 합쳐지는 것�
 
 ## 4. 공통 컬럼·자료형 규칙
 
-- 일반 내부 PK는 `BIGINT` 자동 증가를 제안한다. 외부 제공자의 ID는 문자열로 따로 보관한다.
-- 생성·수정 시각은 `DATETIME(6)` 등으로 표현하고 애플리케이션·DB 연결의 UTC 기준을 맞춘다.
+- 일반 내부 PK는 `BIGINT` 자동 증가다. `local_credentials.member_id`만 기존 회원 ID를 PK/FK로 사용한다. 외부 제공자의 ID는 문자열로 따로 보관한다.
+- 8개 테이블 모두 생성·수정 시각을 `DATETIME(6)`으로 저장한다. JPA의 `AuditedEntity`는 `Instant`를 UTC·마이크로초 정밀도로 기록하고 생성 시각은 UPDATE에서 제외한다. 직접 SQL을 작성할 때도 UTC 값을 넣어야 하며 JPA 콜백은 직접 SQL에 적용되지 않는다.
 - 이름·주소는 UTF-8 문자 저장이 가능한 `utf8mb4`를 사용한다.
-- 로그인 ID의 대소문자·공백 정규화와 DB 비교 규칙을 맞춘다.
+- 로그인 ID의 대소문자·공백 처리와 DB 비교 규칙을 맞췄다. 테이블과 로그인 ID는 `utf8mb4_0900_bin`을 사용해 대소문자를 구분하며 악센트나 외부 코드를 임의로 바꾸지 않는다.
 - 소셜 사용자 ID와 외부 코드는 임의로 소문자로 바꾸지 않는다. 대소문자를 구분해야 하는 값에는 맞는 collation을 선택한다.
 - 위도·경도는 `DECIMAL(10,7)`을 제안한다. 이는 저장 형식이지 측정 정확도 보장이 아니다.
 - 종류·상태는 우선 문자열과 허용값 검증으로 표현한다. 필요한 DB CHECK 제약은 사용할 MySQL 버전에서 검증한다.
-- 아래 문자열 길이는 초기 제안이며 실제 데이터 길이와 인덱스 제한을 확인한 뒤 확정한다.
+- 아래 기본 테이블의 길이와 인덱스는 MySQL 8.4.8에서 검증했다. 실제 이관 데이터·외부 제공처 계약은 후속 단계에서 길이·식별 범위를 다시 확인한다. 선택 테이블의 길이는 아직 제안이다.
 
 회원·장소·즐겨찾기 ID, 소셜 ID, 모델 코드는 서로 다른 식별자다. 값이 우연히 같아도 같은 것으로 취급하지 않는다.
 
@@ -84,23 +92,23 @@ FK가 모듈 사이를 연결해도 데이터 수정 책임이 합쳐지는 것�
 
 ### 5.1 members — 서비스 회원
 
-| 컬럼 | 자료형 제안 | 필수 여부 | 의미 |
+| 컬럼 | 자료형 | 필수 여부 | 의미 |
 |---|---|---|---|
 | `id` | BIGINT | 필수·PK | 내부 회원 번호 |
-| `display_name` | VARCHAR(50) | 가입 완료 시 필수 | 앱에 표시할 이름 |
+| `display_name` | VARCHAR(50) | 필수 | 앱에 표시할 이름 |
 | `email` | VARCHAR(254) | 선택 | 연락용 이메일 |
 | `phone_number` | VARCHAR(20) | 선택 | 연락처. 기존 값은 이관 검토 |
-| `role` | VARCHAR(20) | 필수 | USER·ADMIN 같은 권한. 초기 범위 확정 |
-| `status` | VARCHAR(20) | 필수 | ACTIVE 등 회원 상태 |
+| `role` | VARCHAR(20) | 필수 | USER 또는 ADMIN, 새 객체 기본값 USER |
+| `status` | VARCHAR(20) | 필수 | 현재 허용값 ACTIVE. 정지·탈퇴는 업무 정책과 후속 SQL로 확장 |
 | `created_at`, `updated_at` | DATETIME(6) | 필수 | 생성·수정 시각 |
 
 로그인 ID와 비밀번호는 이 테이블에서 분리한다. 소셜 전용 회원에게 가짜 비밀번호를 만들지 않는다.
 
-이메일은 소셜 계정 식별자가 아니며 초기안에서는 전역 UNIQUE를 두지 않는다. 같은 이메일이라는 이유만으로 서로 다른 계정을 자동 연결하지 않는다. 연락처 필수 수집이나 이메일 중복 제한이 필요하면 별도 정책으로 정한다. 이는 기존 일반 가입 규격의 변경점이므로 앱과 합의해야 한다.
+이메일은 소셜 계정 식별자가 아니며 전역 UNIQUE를 두지 않는다. 이메일·전화번호는 선택값으로 확정했다. 같은 이메일이라는 이유만으로 서로 다른 계정을 자동 연결하지 않는다. 이는 기존 일반 가입 규격의 변경점이므로 API 구현 때 앱의 입력·응답 규격도 맞춘다.
 
 ### 5.2 local_credentials — 일반 로그인
 
-| 컬럼 | 자료형 제안 | 규칙 |
+| 컬럼 | 자료형 | 규칙 |
 |---|---|---|
 | `member_id` | BIGINT | PK이면서 members.id를 참조하는 FK |
 | `login_id` | VARCHAR(50) | NOT NULL·UNIQUE |
@@ -120,7 +128,7 @@ member_id 자체가 PK이므로 한 회원에게 일반 로그인 정보는 최�
 
 ### 5.3 social_accounts — 소셜 계정 연결
 
-| 컬럼 | 자료형 제안 | 규칙 |
+| 컬럼 | 자료형 | 규칙 |
 |---|---|---|
 | `id` | BIGINT | PK |
 | `member_id` | BIGINT | NOT NULL·members.id FK |
@@ -128,7 +136,7 @@ member_id 자체가 PK이므로 한 회원에게 일반 로그인 정보는 최�
 | `provider_user_id` | VARCHAR(255) | NOT NULL. 제공자가 검증한 사용자 ID |
 | `created_at`, `updated_at` | DATETIME(6) | NOT NULL |
 
-고유 제약 제안:
+구현한 고유 제약:
 
 - `UNIQUE(provider, provider_user_id)`: 같은 소셜 계정을 두 회원에게 연결하지 않는다.
 - `UNIQUE(member_id, provider)`: 초기에는 회원당 제공자별 계정 하나만 연결한다.
@@ -161,15 +169,15 @@ member_id 자체가 PK이므로 한 회원에게 일반 로그인 정보는 최�
 
 ### 6.1 buildings, floors, indoor_locations
 
-| 테이블 | 주요 컬럼 제안 | 중요한 관계 |
+| 테이블 | 구현한 주요 컬럼 | 중요한 관계 |
 |---|---|---|
-| buildings | id, name, address, 생성·수정 시각 | 건물 이름만으로 전체 고유성을 강제하지 않음 |
-| floors | id, building_id, floor_number, name | building_id FK, UNIQUE(building_id, floor_number) |
-| indoor_locations | id, floor_id, name, description, legacy_location_code, is_active, 생성·수정 시각 | floor_id FK, 이름만으로 전역 UNIQUE를 두지 않음 |
+| buildings | id, name VARCHAR(255), address VARCHAR(255), 생성·수정 시각 | 이름·주소 필수, 건물 이름의 전역 UNIQUE 없음 |
+| floors | id, building_id, floor_number INT, name VARCHAR(50), 생성·수정 시각 | 모두 필수, building_id FK, UNIQUE(building_id, floor_number) |
+| indoor_locations | id, floor_id, name VARCHAR(255), description TEXT, is_active BIT(1), 생성·수정 시각 | description만 선택, floor_id FK, 이름의 전역 UNIQUE 없음 |
 
 예시: 건물 1=A관, 층 10=A관 2층, 장소 31=205호 앞. 장소 31은 floor_id=10으로 어느 층인지 알 수 있다. 건물 주소를 모든 장소에 복사하지 않는다.
 
-층 번호는 INT로 두어 지하층도 표현할 수 있게 한다. 0층 등 표기 규칙은 실제 건물 기준으로 정한다. legacy_location_code는 이전 ID를 보존할 필요가 있을 때 사용하며, 전역 코드인지 구역별 코드인지 확인하고 제약을 정한다.
+층 번호는 INT로 두어 지하층도 표현할 수 있게 한다. 0층 등 표기 규칙은 실제 건물 기준으로 정한다. legacy_location_code는 이번 SQL에 넣지 않았다. 이후 데이터 이관에서 필요하면 전역/구역별 의미와 제약을 확인해 추가한다. 설명은 Java에서 최대 10,000자로 제한해 utf8mb4 TEXT의 바이트 한도 안에 둔다.
 
 ### 6.2 model_location_mappings
 
@@ -182,7 +190,7 @@ member_id 자체가 PK이므로 한 회원에게 일반 로그인 정보는 최�
 | indoor_location_id | 실제 실내 장소 FK |
 | created_at, updated_at | 매핑 생성·수정 시각 |
 
-model_key·model_version·location_code는 필수이며 이 세 값의 조합을 UNIQUE로 둔다. indoor_location_id도 필수다. 예시 키 길이는 각각 VARCHAR(128)·VARCHAR(64)·VARCHAR(50)이며 모델 계약과 맞춘다.
+model_key·model_version·location_code는 필수이며 이 세 값의 조합을 UNIQUE로 둔다. indoor_location_id도 필수다. 구현한 길이는 각각 VARCHAR(128)·VARCHAR(64)·VARCHAR(50)이다. 실제 모델 계약·적용 구역 데이터의 검증은 후속 단계다.
 
 예시: IT관 모델 / v1 / 코드 205 → 장소 31.
 
@@ -229,7 +237,7 @@ model_key·model_version·location_code는 필수이며 이 세 값의 조합을
 
 ### 8.1 공통 정보
 
-| 컬럼 | 자료형 제안 | 의미 |
+| 컬럼 | 자료형 | 의미 |
 |---|---|---|
 | id | BIGINT | 즐겨찾기 자체 PK |
 | member_id | BIGINT | 소유 회원 FK, 필수 |
@@ -237,11 +245,11 @@ model_key·model_version·location_code는 필수이며 이 세 값의 조합을
 | target_key | VARCHAR(255) | 서버가 만든 중복 판별 키, 필수 |
 | indoor_location_id | BIGINT | 내부 실내 장소를 저장한 경우의 FK |
 | outdoor_place_id | BIGINT | 자체 실외 장소 기능을 채택했을 때만 추가할 FK |
-| provider, external_id | VARCHAR(32), VARCHAR(255) | 외부 제공처·실제 외부 ID. 해당할 때만 사용 |
+| provider, provider_scope, external_id | VARCHAR(32), VARCHAR(128), VARCHAR(255) | 교통 제공처·식별 범위·실제 외부 ID. BUS/BUS_STOP에서 필수 |
 | legacy_id | VARCHAR(255) | 기존 앱 ID 호환이 필요할 때만 추가 |
 | created_at, updated_at | DATETIME(6) | 생성·수정 시각 |
 
-기본 UNIQUE는 (member_id, target_type, target_key)를 제안한다. A와 B는 같은 장소를 각각 저장할 수 있고, A의 동일 대상 중복만 차단한다.
+기본 UNIQUE는 (member_id, target_type, target_key)다. 키를 임의로 바꿔도 중복을 막도록 (member_id, indoor_location_id)와 (member_id, target_type, provider, provider_scope, external_id)에도 UNIQUE를 둔다. A와 B는 같은 장소를 각각 저장할 수 있고, A의 동일 대상 중복만 차단한다.
 
 target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로도 보호하며, 키는 그 FK 값에서 서버가 일관되게 만든다. 앱이 임의 키를 보내 중복 제한을 우회하게 두지 않는다.
 
@@ -249,9 +257,9 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 
 ### 8.2 유형별 대상 연결
 
-내부 구분 이름은 초안이다. 기존 앱의 place·bus·busStop과 변환 규칙을 먼저 합의한다.
+현재 구현한 내부 유형은 INDOOR_PLACE·BUS·BUS_STOP이다. OUTDOOR_PLACE·EXTERNAL_PLACE는 허용하지 않는다. 기존 앱의 place·bus·busStop과 새 유형·ID의 변환은 API 전환 때 합의한다.
 
-| 내부 유형 제안 | 대상 연결 | 키 예시·주의 |
+| 내부 유형 (선택 사항 구분) | 대상 연결 | 키 예시·주의 |
 |---|---|---|
 | INDOOR_PLACE | indoor_location_id 필수 | indoor:31 |
 | OUTDOOR_PLACE — 선택 | outdoor_place_id 필수 | outdoor:88 |
@@ -261,7 +269,9 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 
 한 행이 실내 장소와 버스를 동시에 가리킬 수 없게 필수·금지 컬럼 조합을 정의한다. 서비스 검증과 DB CHECK를 함께 적용하되 실제 MySQL에서 NULL 조합과 제약 동작을 테스트한다.
 
-외부 교통의 지역·방향 등 식별 범위는 계약으로 확정한다. external_id가 존재하는 경우에만 실제 제공자 ID를 저장하며, 외부 FK가 있다고 가정하지 않는다.
+교통의 식별 범위는 provider_scope에 필수로 받는다. 실제 제공처별 지역·방향·데이터셋 범위와 허용 값은 API 계약 때 확정한다. 현재는 문자열 저장 구조와 합성 데이터 검증만 제공하며 실제 교통 API 연동은 없다. external_id는 실제 제공자 ID이며 외부 FK가 있다고 가정하지 않는다.
+
+실내 target_key는 `indoor:<장소 ID>`다. 교통 키는 제공처·범위·외부 ID 각각에 길이 접두어를 붙여 결합한 값의 SHA-256 앞에 `BUS:` 또는 `BUS_STOP:`을 붙인다. [Favorite](src/main/java/com/example/magnavi_springserver/favorite/domain/Favorite.java)의 팩터리만 키를 만들며 입력 키를 받지 않는다. 해시는 긴 식별 조합을 고정 길이로 표현하기 위한 것이며 실제 대상의 의미는 원본 세 컬럼에 보존한다. DB의 원본 조합 UNIQUE도 키 조작에 의한 중복을 막는다.
 
 ### 8.3 네이버 장소에 고유 ID가 없으면?
 
@@ -292,18 +302,18 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 
 ## 9. 조회·삭제·트랜잭션 규칙
 
-| 대상 | 제약·인덱스 제안 | 목적 |
+| 대상 | 구현한 제약·인덱스 | 목적 |
 |---|---|---|
 | local_credentials | login_id UNIQUE | 일반 로그인 조회·중복 차단 |
 | social_accounts | provider+provider_user_id UNIQUE, member_id+provider UNIQUE | 로그인 조회·연결 충돌 방지 |
 | floors | building_id+floor_number UNIQUE | 같은 건물의 층 중복 방지 |
 | model_location_mappings | model_key+model_version+location_code UNIQUE | 올바른 매핑 조회 |
 | favorites | member_id+target_type+target_key UNIQUE | 회원별 중복 방지 |
-| favorites | member_id+created_at+id 조회 인덱스 | 내 목록의 안정적인 정렬·페이지 처리 |
+| favorites | member_id+created_at+id 조회 인덱스 | 내 목록의 생성 시각·PK 내림차순 Slice 조회 |
 
 이미 PK·UNIQUE로 지원되는 조회에 같은 인덱스를 중복 추가하지 않는다. 실제 쿼리와 실행 계획으로 필요한 인덱스를 확정한다. 소유권 검사는 인덱스의 존재만으로 해결되지 않는다.
 
-참조 중인 건물·층·장소는 무조건 연쇄 삭제하지 않고 삭제 거절 또는 비활성화를 제안한다. 물리 삭제의 기본 FK 동작은 RESTRICT를 검토한다. 회원 탈퇴 시 인증 정보·즐겨찾기의 정리 범위와 보관 정책은 별도로 확정한다.
+참조 중인 부모 행은 FK의 기본 NO ACTION 동작으로 물리 삭제를 거절하며 연쇄 삭제하지 않는다. MySQL InnoDB에서 즉시 참조를 확인한다. 실내 장소에는 비활성화 메서드를 제공하지만 API에서의 등록·표시 정책은 후속 작업이다. 회원 탈퇴 시 인증 정보·즐겨찾기의 정리 범위와 보관 정책은 별도로 확정한다.
 
 장소 비활성화는 물리 FK만으로 막을 수 없으므로 신규 즐겨찾기 등록과 표시 정책에서도 검사한다. 회원 상태 변경 후 이미 발급한 토큰의 효력은 별도 인증 정책이다. 상태 컬럼을 바꿨다고 모든 연결이 즉시 취소되는 것은 아니다.
 
@@ -313,11 +323,11 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 
 - Flyway: 테이블·제약·인덱스 변경 SQL과 적용 이력.
 - JPA: Java 객체를 통한 데이터 조회·저장.
-- ddl-auto=validate: 엔티티와 DB 구조가 맞는지 검증하는 설정 방향.
+- ddl-auto=validate: 엔티티와 DB 구조가 맞는지 기동 시 검증한다. 모든 UNIQUE·FK·CHECK 의미까지 검증하는 것은 아니므로 실제 SQL 실패 테스트를 함께 둔다.
 
 스키마 변경 수단은 Flyway로 통일한다. 운영에서 JPA update와 Flyway가 각각 구조를 바꾸게 하지 않는다. 기본 경로는 src/main/resources/db/migration이며, 버전 SQL로 변경을 쌓는다. [Spring Boot DB 초기화 안내](https://docs.spring.io/spring-boot/how-to/data-initialization.html)
 
-파일명 예시이며 아직 생성하지 않았다.
+다음 세 버전 SQL을 구현했다. Spring Boot 기동 시 Flyway가 적용한 다음 JPA 매핑을 검증한다.
 
 - V1__create_member_tables.sql: 회원·일반 인증·소셜 연결.
 - V2__create_indoor_place_tables.sql: 건물·층·실내 장소·모델 매핑.
@@ -326,7 +336,9 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 
 공유 환경에 적용한 SQL은 덮어쓰기보다 새 버전으로 수정한다. 기존 DB에 초기 생성 SQL을 무조건 실행하지 않는다. Flyway 이력은 업무 데이터 백업을 대체하지 않는다.
 
-## 11. 기존 FastAPI 데이터 이관
+## 11. 기존 FastAPI 데이터 이관 — 후속 작업
+
+2026-09-20에 새 스키마부터 구현하고 기존 데이터 이관은 나중에 결정하기로 했다. 기존 DB를 변경·비우거나 원본 데이터를 옮기지 않았다. 아래는 향후 이관을 선택할 때의 계획이다. Flyway V1→V3 확장 테스트는 새 스키마의 버전 확장 검증이며 FastAPI 데이터 변환 검증은 아니다.
 
 | 원본 | 목표 | 확인할 내용 |
 |---|---|---|
@@ -353,24 +365,29 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 
 측정 세션은 제한된 메모리 자원으로 관리한다. 우리 서비스의 refresh_tokens는 재발급·폐기 정책을 정할 때 별도로 설계하며 소셜 제공자 토큰과 혼동하지 않는다.
 
-## 13. 구현 전에 확정할 사항
+## 13. 확정한 정책과 후속 결정 사항
 
 | 항목 | 결정할 내용 |
 |---|---|
-| 일반 로그인 | 유지 범위·기존 폼 호환·ID 정규화 |
-| 회원 프로필 | 연락처 필수 여부·이메일 중복 정책·표시 이름 수집 |
+| 일반 로그인 | ID 공백 제거·대소문자 구분 확정. 기존 폼·토큰 호환은 후속 작업 |
+| 회원 프로필 | 이메일·전화번호 선택·이메일 중복 허용 확정. 표시 이름 수집은 가입 흐름에서 연결 |
 | 소셜 로그인 | 앱 SDK·서버 인증 방식·허용 client/앱·계정 연결 초기 포함 여부 |
 | 계정 수명 | 연결 해제·탈퇴·재발급·상태 변경 후 토큰 처리 |
 | 네이버 검색 | API HUB 신청·실제 응답·검색 화면에 필요한 결과 수 |
 | 외부 저장 | 캐시·스냅샷 허용 필드·기간·표시·갱신·삭제 조건 |
 | 장소 범위 | 자체 실외 장소·접근성 관리 여부와 원본 데이터 보존 |
 | 즐겨찾기 | 내부/외부 구분·네이버 중복 판별 한계·교통 식별 범위 |
-| DB 이관 | 새 DB 또는 기존 데이터 유지·ID 변환·복구 |
-| DB 환경 | MySQL 버전·문자 비교·CHECK·시간대·인덱스 검증 |
+| DB 이관 | 새 빈 DB 구조 구현 확정. 기존 DB 보존·이관 여부와 ID 변환·복구는 후속 결정 |
+| DB 환경 | MySQL 8.4.8에서 문자 비교·CHECK·UTC·제약 검증 완료. 운영 용량·쿼리 성능은 후속 검증 |
 
 ## 14. 완료 확인
 
-- [ ] 빈 테스트 DB를 Flyway로 재현하고 JPA 검증을 통과한다.
+- [x] 빈 테스트 DB를 Flyway로 재현하고 JPA 검증을 통과한다.
+- [x] V1 데이터가 V3 확장·최신 SQL 재실행 뒤에도 유지된다.
+- [x] 로그인 ID 대소문자·공백 처리와 선택 연락처·이메일 중복 허용을 검증한다.
+- [x] 저장소 트랜잭션에서 일반 인증 중복 실패 시 신규 회원 저장도 롤백한다.
+- [x] 소셜 전용 회원 저장, 모델 키·버전·코드 매핑, 회원별 즐겨찾기 조회·중복 제약을 검증한다.
+- [x] 생성·수정 시각의 UTC 저장·복원과 수정 시 생성 시각 보존을 검증한다.
 - [ ] 일반 가입 실패 시 회원과 인증 정보가 부분 저장되지 않는다.
 - [ ] 소셜 전용 회원은 일반 비밀번호 없이 로그인한다.
 - [ ] 같은 소셜 계정의 동시 가입·타 회원 연결을 차단한다.
@@ -380,6 +397,6 @@ target_key는 실제 FK를 대신하지 않는다. 내부 장소는 실제 FK로
 - [ ] 네이버 검색만으로 DB에 결과가 누적되지 않는다.
 - [ ] 외부 스냅샷 저장은 허용 범위 확정 후 검증한다.
 - [ ] A와 B의 동일 대상 저장, A의 중복, 타인 항목 삭제를 테스트한다.
-- [ ] 대상별 NULL 조합·FK·UNIQUE·참조 중 삭제를 실제 MySQL에서 테스트한다.
+- [x] 대상별 NULL 조합·FK·UNIQUE·참조 중 삭제를 실제 MySQL에서 테스트한다.
 - [ ] 이관 전후 회원·즐겨찾기·장소 건수와 ID 관계를 비교한다.
 - [ ] 센서·예측 결과·비밀정보가 DB와 일반 로그에 남지 않는다.

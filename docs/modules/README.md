@@ -1,10 +1,10 @@
 # Spring 모듈 안내서
 
-작성일: 2026-09-10
+작성일: 2026-09-10 · 기반 구현 반영일: 2026-09-18
 
 이 폴더는 MagNavi Spring 서버를 모듈러 모놀리스로 구현하기 위한 설명서다. 처음 읽는 사람도 기능과 처리 흐름을 이해할 수 있도록 작성했다.
 
-현재 프로젝트에는 아래 계층을 위한 빈 클래스 39개가 있다. 필드·메서드·어노테이션·인터페이스·DB 구조는 아직 구현하지 않았다. 클래스 이름이 있어도 API나 외부 연결이 동작하는 것은 아니다. 전체 작업 순서는 [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md), 테이블·컬럼·저장 정책은 [DB 스키마 설계](../../DATABASE_SCHEMA.md)를 참고한다.
+초기에는 아래 계층을 위한 빈 클래스 39개를 준비했다. 이후 공통 오류·요청 추적·기본 보안과 실행·테스트 설정을 구현했으며, 업무 모듈과 DB 구조는 아직 빈 골격·설계 상태다. 전체 작업 순서는 [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md), 현재 실행 방법은 [README](../../README.md), 테이블·컬럼·저장 정책은 [DB 스키마 설계](../../DATABASE_SCHEMA.md)를 참고한다.
 
 ## 1. 모듈러 모놀리스는 무엇인가?
 
@@ -131,9 +131,9 @@ DB에 외래 키가 있다고 다른 모듈의 Repository를 직접 호출해도
 
 새 기능이 추가되면 해당 모듈 문서의 책임·흐름·데이터·오류·테스트 항목을 함께 갱신한다. 아직 정하지 않은 정책은 확정된 기능과 구분해서 표시한다.
 
-## 9. 현재 생성한 골격
+## 9. 초기 골격과 현재 구현 상태
 
-| 영역 | 빈 클래스 수 | 대표 클래스 |
+| 영역 | 초기 빈 클래스 수 | 대표 클래스 |
 |---|---|---|
 | member | 14 | Member, SignUpService, SocialLoginService, MemberPersistenceAdapter |
 | place | 10 | IndoorLocation, PlaceQueryService, PlaceSearchService, NaverLocalSearchClient |
@@ -142,6 +142,8 @@ DB에 외래 키가 있다고 다른 모듈의 Repository를 직접 호출해도
 | shared | 3 | ErrorResponse, AuthenticatedMember, TraceIdGenerator |
 | config | 3 | SecurityConfig, WebSocketConfig, GrpcClientConfig |
 
-모두 역할 주석과 빈 클래스 선언만 있는 상태다. Repository 등 인터페이스와 실제 기능은 다음 구현 단계에서 추가한다. 선택 사항인 자체 실외 장소·시설 클래스는 미리 만들지 않았다.
+member·place·favorite·positioning은 위 골격 상태를 유지한다. Repository 등 인터페이스와 실제 업무 기능은 다음 단계에서 추가한다. 선택 사항인 자체 실외 장소·시설 클래스는 미리 만들지 않았다.
 
-테스트·마이그레이션은 로컬 빈 폴더만 준비했다. Git은 빈 폴더를 추적하지 않으며 이번에는 .gitkeep·더미 테스트·빈 SQL을 추가하지 않았다. 실제 테스트나 SQL이 생기면 해당 폴더도 함께 추적된다.
+1단계에서는 `ErrorResponse`, `TraceIdGenerator`, `SecurityConfig`를 구현하고 MVC·보안·서블릿 오류 처리와 요청 추적 필터를 추가했다. `AuthenticatedMember`, `WebSocketConfig`, `GrpcClientConfig`는 빈 골격이다. 자세한 현재 공통 동작은 [shared](SHARED.md)를 참고한다.
+
+기반 테스트는 실제 MySQL 연결·보안·오류·추적을 검증한다. 업무 마이그레이션 SQL은 아직 없으며, 빈 폴더를 추적하기 위한 .gitkeep이나 빈 SQL은 추가하지 않는다.

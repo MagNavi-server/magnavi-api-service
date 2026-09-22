@@ -1,6 +1,8 @@
 # favorite — 즐겨찾기 모듈
 
-작성일: 2026-09-10 · 상태: 구현 예정 설계
+최초 작성일: 2026-09-10 · DB 기반 반영일: 2026-09-20
+
+현재 구현: Favorite 엔티티와 내부 저장소를 구현했다. INDOOR_PLACE·BUS·BUS_STOP만 허용하고 실내 FK 또는 provider·provider_scope·external_id의 필수/금지 조합을 CHECK로 보호한다. 서버 대상 키와 원본 식별 조합의 UNIQUE로 회원별 중복을 차단한다. 소유 회원 조건 조회·생성 시각/PK 내림차순 페이지를 검증했다. 아래 인증된 API 등록/삭제·교통 제공처 계약·외부 스냅샷·기존 FavoritePersistenceAdapter는 후속 구현이다.
 
 [전체 모듈 안내](README.md) · [장소 모듈](PLACE.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 

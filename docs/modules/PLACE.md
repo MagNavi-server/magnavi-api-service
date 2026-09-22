@@ -1,6 +1,8 @@
 # place — 장소 정보 모듈
 
-작성일: 2026-09-10 · 상태: 구현 예정 설계
+최초 작성일: 2026-09-10 · DB 기반 반영일: 2026-09-20
+
+현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 아래 장소 API·공개 조회 계약·네이버 연동·기존 PlacePersistenceAdapter는 후속 구현이다.
 
 [전체 모듈 안내](README.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 

@@ -2,7 +2,7 @@
 
 MagNavi의 회원·장소·즐겨찾기와 실시간 측정 연결을 담당할 Spring 서버다. 서버 역할과 목표 구조는 [프로젝트 개요](PROJECT_OVERVIEW.md), 후속 작업은 [구현 계획](IMPLEMENTATION_PLAN.md)을 참고한다.
 
-현재는 **1단계 실행·테스트 기반과 2단계 DB 기반**을 구현했다. 환경별 설정·공통 오류·요청 추적·기본 접근 정책에 더해, Flyway SQL 3개와 8개 업무 테이블의 JPA 엔티티·저장소를 제공한다. 업무 API·JWT·WebSocket·gRPC 통신은 후속 단계다.
+현재는 **1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT 인증**을 구현했다. 회원가입·로그인·내 정보 조회·이름 변경 API를 제공하며, 기존 DB 구조를 그대로 사용한다. 소셜 로그인·장소·즐겨찾기 API·WebSocket·gRPC 통신은 후속 단계다. 요청 예시와 오류는 [회원 API 안내](docs/api/MEMBER_API.md)를 참고한다.
 
 ## 1. 준비 환경
 
@@ -46,7 +46,9 @@ docker compose -f compose.local.yaml stop
 
 ## 3. Spring 실행
 
-Spring은 `.env`를 자동으로 읽지 않는다. 직접 작성한 로컬 `.env`를 다음과 같이 환경변수로 내보내거나, IDE 실행 설정에 `MYSQL_PASSWORD`와 필요한 경우 `MAGNAVI_MYSQL_PORT`를 넣는다.
+서버 실행 전에 `openssl rand -base64 32`로 개발 전용 난수 키를 만들어 `.env`의 `JWT_SECRET_BASE64`에 넣는다. 키를 비워 두거나 Base64를 풀었을 때 32바이트보다 짧으면 서버가 시작되지 않는다. 키는 서버에서만 보관하고 앱·Git·로그에 넣지 않는다. 재시작마다 새 키를 만들면 기존 토큰이 무효가 되므로 같은 환경에서는 설정한 키를 유지한다.
+
+Spring은 `.env`를 자동으로 읽지 않는다. 직접 작성한 로컬 `.env`를 다음과 같이 환경변수로 내보내거나, IDE 실행 설정에 `MYSQL_PASSWORD`, `JWT_SECRET_BASE64`와 필요한 경우 `MAGNAVI_MYSQL_PORT`를 넣는다.
 
 ```bash
 set -a
@@ -67,22 +69,24 @@ curl -i http://127.0.0.1:8080/users/me
 |---|---|
 | `GET /actuator/health/liveness` | 애플리케이션 생존 상태. 정상 시 `200 {"status":"UP"}` |
 | `GET /actuator/health/readiness` | 애플리케이션 준비 상태와 DB 확인. DB 장애 시 503 |
-| 그 외 요청 | 미인증 401, 인증 주체가 있어도 명시적으로 허용하기 전에는 403 |
+| `POST /users/signup`, `POST /users/login` | 로그인 전 호출 가능. JSON 가입·폼 로그인 |
+| `GET /users/me`, `PUT /users/me/username` | 유효한 JWT와 존재하는 회원 필요 |
+| 그 외 요청 | 미인증 401, 인증했어도 명시적으로 허용하기 전에는 403 |
 
 상태 확인 응답에는 DB 주소·구성 요소·예외 상세를 공개하지 않는다. 현재 준비 상태에 Python 모델 서비스는 포함되지 않는다.
 
-기본 로그인 화면·임시 사용자·HTTP Basic·세션 인증은 사용하지 않는다. JWT 발급·검증도 아직 연결하지 않았다. 회원 단계에서 필요한 경로와 인증 처리를 함께 추가한다. 현재 쿠키 인증을 사용하지 않아 CSRF 검사는 비활성화했으며, 향후 쿠키 인증 도입 시 다시 설계한다.
+기본 로그인 화면·임시 사용자·HTTP Basic·세션 인증은 사용하지 않는다. 로그인 성공 시 30분 액세스 JWT를 발급하며 이후 `Authorization: Bearer` 헤더로 검증한다. 재발급·로그아웃 API는 아직 없다. 현재 쿠키 인증을 사용하지 않아 CSRF 검사는 비활성화했으며, 향후 쿠키 인증 도입 시 다시 설계한다.
 
 ## 4. 환경과 DB 설정
 
 | 환경 | 설정 | DB 주입 방식 |
 |---|---|---|
-| 공통 | `application.yaml` | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` 필수 |
+| 공통 | `application.yaml` | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET_BASE64` 필수 |
 | 개발 | `application-local.yaml` | 개발용 주소·계정, `MYSQL_PASSWORD` 필수 |
 | 테스트 | `src/test/resources/application-test.yaml` | Spring의 `@ServiceConnection`으로 임시 MySQL 정보 주입 |
 | 배포 | `application-prod.yaml` | `SPRING_PROFILES_ACTIVE=prod`와 공통 DB 변수 외부 주입 |
 
-테스트 프로필의 기본 DB 주소는 연결할 수 없는 대체값이다. 통합 테스트는 `MySqlTestConfiguration`을 가져와 전용 컨테이너에 연결한다. 로컬 `.env`나 운영 DB를 테스트에 사용하지 않는다. 웹 계층 테스트는 DB를 실행하지 않는다.
+테스트 프로필의 기본 DB 주소는 연결할 수 없는 대체값이다. 통합 테스트는 `MySqlTestConfiguration`을 가져와 전용 컨테이너에 연결한다. 테스트용 JWT 키도 실행마다 메모리에서 생성한다. 로컬 `.env`나 운영 DB·키를 테스트에 사용하지 않는다. 웹 계층 테스트는 DB를 실행하지 않는다.
 
 스키마 변경은 Flyway가 담당하고, JPA는 `ddl-auto=validate`로 매핑을 검증한다. `open-in-view=false`로 요청 전체에 DB 접근 범위를 넓히지 않는다. Flyway의 `clean`과 자동 baseline은 비활성화했고, `schema.sql` 같은 별도 SQL 초기화도 사용하지 않는다.
 
@@ -125,13 +129,17 @@ Docker를 실행한 상태에서 다음 명령을 사용한다. 로컬 개발 DB
 
 Testcontainers는 테스트용 MySQL을 임시 포트로 실행하고 종료 시 정리한다. Docker를 사용할 수 없으면 통합 테스트는 실패하며, 임의로 건너뛰지 않는다.
 
-검증 범위는 실제 MySQL 연결과 V1~V3 생성·JPA validate, V1에서 최신 버전으로 확장·재실행 시 데이터 보존, 8개 엔티티 저장/조회, 대소문자·선택 연락처·회원별 즐겨찾기·고유/FK/NOT NULL/CHECK 제약·트랜잭션 롤백·UTC 시각 저장이다. 최소 상태 확인, 401·403, 오류 비노출, 동시 요청 추적 테스트도 유지한다. 빌드 결과는 `build/libs/`, 테스트 보고서는 `build/reports/tests/test/index.html`에서 확인한다. 인증 업무·기존 데이터 이관·실제 모델·배포 검증은 후속 단계다.
+검증 범위는 실제 MySQL 연결과 V1~V3 생성·JPA validate, V1에서 최신 버전으로 확장·재실행 시 데이터 보존, 8개 엔티티 저장/조회, 대소문자·선택 연락처·회원별 즐겨찾기·고유/FK/NOT NULL/CHECK 제약·트랜잭션 롤백·UTC 시각 저장이다. 최소 상태 확인, 401·403, 오류 비노출, 동시 요청 추적 테스트도 유지한다. 빌드 결과는 `build/libs/`, 테스트 보고서는 `build/reports/tests/test/index.html`에서 확인한다. 일반 회원 API·실제 JWT 인증·본인 정보 접근·비밀번호 해시 호환을 추가 검증했다. 소셜 인증·기존 데이터 이관·실제 앱·모델·운영 배포 검증은 후속 단계다.
 
 2026-09-18 검증에서는 Java 21로 `./gradlew build`를 실행해 테스트 19개와 실행 JAR 빌드를 통과했다. 별도 임시 Compose 프로젝트와 메모리 DB 저장소로 healthcheck·로컬 JAR 기동·401 응답·DB 장애 시 readiness 503/liveness 200을 확인했다. `prod`의 DB 설정을 비우면 DataSource 생성 단계에서 기동이 실패하는 것도 확인했다. 검증용 프로세스·컨테이너·네트워크는 정리했으며 기존 DB 볼륨은 사용하거나 삭제하지 않았다.
 
 2026-09-20에는 2단계 반영 후 Java 21의 `./gradlew build`에서 테스트 **42개**와 실행 JAR 빌드가 통과했다. 검증에는 일회용 MySQL 8.4.8만 사용했다. 기존 개발/운영 DB에는 마이그레이션이나 데이터 이관을 실행하지 않았다.
 
+2026-09-21에는 3-1단계 반영 후 Java 21의 `./gradlew test`와 `./gradlew build`에서 **65개 테스트**와 실행 JAR 빌드를 통과했다. 새 테스트 23개는 회원 API 16개, JWT 기동 설정 4개, BCrypt 저장·Python 호환 3개다. 기존 Python과 같은 passlib 1.7.4·bcrypt 4.3.0을 임시 폴더에서 사용해 합성 해시를 만들었으며 Python 프로젝트와 기존 DB는 변경하지 않았다.
+
 ## 7. 관련 문서
+
+- [일반 회원 API 요청·응답·오류](docs/api/MEMBER_API.md)
 
 - [프로젝트 개요](PROJECT_OVERVIEW.md)
 - [구현 계획](IMPLEMENTATION_PLAN.md)

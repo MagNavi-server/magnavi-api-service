@@ -15,7 +15,7 @@ import com.example.magnavi_springserver.shared.error.SecurityErrorResponseWriter
 import com.example.magnavi_springserver.shared.security.AuthenticatedMember;
 
 /**
- * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보에는 검증된 JWT를 요구한다.
+ * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보와 외부 검색에는 JWT를 요구한다.
  */
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
@@ -56,6 +56,7 @@ public class SecurityConfig {
                                 "/floors/{floorId}/locations", "/floors/{floorId}/locations/",
                                 "/locations", "/locations/", "/locations/{locationId}", "/locations/{locationId}/").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/places/search", "/places/search/").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/users/me/username").authenticated()
                         .anyRequest().denyAll())
                 .build();

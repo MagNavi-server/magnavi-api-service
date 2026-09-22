@@ -15,7 +15,7 @@ import com.example.magnavi_springserver.shared.observability.RequestTraceFilter;
 
 /** 예상 가능한 장소 조회 실패를 기존 공통 오류 형식에 맞춘다. */
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = PlaceController.class)
+@RestControllerAdvice(assignableTypes = {PlaceController.class, PlaceSearchController.class})
 public class PlaceExceptionHandler {
 
     /** 입력 오류는 400, 대상 없음은 404로 구분하고 입력값·DB 정보는 공개하지 않는다. */

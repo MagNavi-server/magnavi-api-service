@@ -26,6 +26,17 @@ spring:
       mode: never
 
 magnavi:
+  naver-search:
+    # 키와 실제 응답의 좌표 단위를 확인한 뒤 활성화한다. 준비 전에는 검색만 503을 반환한다.
+    enabled: ${NAVER_SEARCH_ENABLED:false}
+    client-id: ${NAVER_SEARCH_CLIENT_ID:}
+    client-secret: ${NAVER_SEARCH_CLIENT_SECRET:}
+    coordinate-format: ${NAVER_SEARCH_COORDINATE_FORMAT:UNCONFIRMED}
+    connect-timeout-ms: 1000
+    request-timeout-ms: 3000
+    requests-per-member-per-minute: 30
+    requests-per-minute: 300
+    max-concurrent-requests: 4
   jwt:
     # 실제 키는 저장소에 넣지 않는다. 값이 없거나 약하면 서버 시작을 거절한다.
     secret-base64: ${JWT_SECRET_BASE64:}

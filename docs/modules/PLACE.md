@@ -2,7 +2,7 @@
 
 최초 작성일: 2026-09-10 · 실내 조회 API 반영일: 2026-09-21 · 모델 매핑 내부 조회 반영일: 2026-09-22
 
-현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 4-1단계에서 건물·층·활성 장소 GET 7개와 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository·조회 DTO를 구현했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter로 모델 매핑 내부 조회를 구현했다. 네이버 연동은 후속 구현이다. [조회 API 안내](../api/PLACE_API.md)에 실행 순서와 요청·응답을 정리했다.
+현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 4-1단계에서 건물·층·활성 장소 GET 7개와 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository·조회 DTO를 구현했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter로 모델 매핑 내부 조회를 구현했다. 4-3단계에서 JWT 기반 네이버 검색과 호출 한도·안전한 오류 처리를 구현했다. 실제 키·좌표 단위·앱 지도 연동은 후속 확인 사항이다. [검색 API 안내](../api/PLACE_SEARCH_API.md)에 계약과 설정을 정리했다. [조회 API 안내](../api/PLACE_API.md)에 실행 순서와 요청·응답을 정리했다.
 
 [전체 모듈 안내](README.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 
@@ -35,12 +35,12 @@ place는 “장소가 어디에 있고 어떤 곳인가?”를 알려 주는 모
 | 층별 장소 목록 | GET /floors/{floorId}/locations | 4-1 구현 |
 | 실내 목록 | GET /locations/ | 4-1 구현 |
 | 실내 상세 | GET /locations/{location_id} | 4-1 구현, 새 DB의 내부 장소 ID 사용 |
-| 네이버 장소 검색 | 신규. GET /places/search?query=...는 경로 예시 | place의 검색 서비스로 구현 |
+| 네이버 장소 검색 | GET /places/search?query=... | 4-3 구현, JWT와 현재 회원 확인 필요 |
 | 실외 등록·목록·상세·수정·삭제 | 기존 /outdoor-places/ 계열 | 자체 관리 필요성과 앱 호환에 따라 이관·보류 결정 |
 
 네이버 검색을 도입했다고 기존 실외 장소 데이터나 API가 자동으로 없어지는 것은 아니다. 사용 중인 앱·시설 데이터의 보존과 전환을 확인해야 한다.
 
-실내 장소 관리자용 등록·수정·삭제 API도 별도 결정 사항이다. 기준 데이터는 검증된 마이그레이션이나 관리 절차로 준비할 수 있다. 이번에는 실제 자료나 임의 예시를 개발/운영 DB에 등록하지 않았다. 모든 조회 GET은 기존 FastAPI처럼 로그인 없이 허용하며 변경 API는 제공하지 않는다.
+실내 장소 관리자용 등록·수정·삭제 API도 별도 결정 사항이다. 기준 데이터는 검증된 마이그레이션이나 관리 절차로 준비할 수 있다. 이번에는 실제 자료나 임의 예시를 개발/운영 DB에 등록하지 않았다. 실내 조회 GET은 기존 FastAPI처럼 로그인 없이 허용하며 변경 API는 제공하지 않는다. 외부 검색 GET에는 JWT 인증을 적용한다.
 
 ## 4. 어떤 데이터를 관리하는가?
 
@@ -109,6 +109,8 @@ outdoor_places와 place_facilities는 자체 실외 장소·시설 관리를 선
 
 ### 7.1 네이버 검색 흐름
 
+4-3단계에서 구현했다. 기본은 비활성이며 키와 좌표 단위를 준비한 뒤 설정으로 켠다. 회원별 분당 30회·서버 전체 분당 300회·동시 4건, 연결 1초·전체 응답 3초·본문 64KiB를 기본 한도로 사용한다. 한도는 단일 프로세스 기준이며 앱은 JWT로 인증한다.
+
 1. 앱이 검색어를 Spring에 보낸다.
 2. Controller가 검색어 길이·허용 파라미터·요청 한도를 검사한다.
 3. PlaceSearchService가 네이버 호출 어댑터에 검색을 요청한다.
@@ -116,7 +118,7 @@ outdoor_places와 place_facilities는 자체 실외 장소·시설 관리를 선
 5. 응답의 표시 형식·좌표를 앱 계약에 맞게 처리한다.
 6. 앱에 반환하고 앱이 지도에 표시한다. 기본 DB 저장은 없다.
 
-NaverLocalSearchClient 같은 이름은 외부 API 호출 구현의 예시다. 검색용 Client Secret을 앱에 전달하지 않는다.
+NaverLocalSearchClient가 외부 API 호출과 응답 변환을 담당한다. 검색용 Client Secret을 앱에 전달하지 않는다.
 
 검색 요청은 긴 DB 트랜잭션으로 감싸지 않는다. 호출 시간 제한·한도·재시도 횟수를 제한하고, 제공자 장애를 “검색 결과 없음”으로 숨기지 않는다. 원문 검색어와 응답 전체를 기본 로그에 남기지 않는다.
 
@@ -124,9 +126,9 @@ NaverLocalSearchClient 같은 이름은 외부 API 호출 구현의 예시다. �
 
 신규 신청은 NAVER API HUB 기준으로 진행한다. 기존 개발자센터의 Search API 신규 신청은 2026-07-31부터 중단되었다. [공식 공지](https://developers.naver.com/notice/article/32530)
 
-2026-09-10 확인한 지역 검색 명세는 결과 최대 5개·start=1이며 고유 장소 ID 필드가 없다. 네이버 지도 앱과 같은 전체 검색·페이지 이동 기능을 보장하지 않는다. [현재 지역 검색 명세](https://api.ncloud-docs.com/docs/naver-api-hub-search-local)
+2026-09-22 다시 확인한 지역 검색 명세는 결과 최대 5개·start=1이며 고유 장소 ID 필드가 없다. 네이버 지도 앱과 같은 전체 검색·페이지 이동 기능을 보장하지 않는다. [현재 지역 검색 명세](https://api.ncloud-docs.com/docs/naver-api-hub-search-local)
 
-좌표 단위·축·표현은 실제 응답으로 검증하고 오래된 예제의 변환 공식을 무조건 재사용하지 않는다. 검색 결과의 표시·변환도 적용되는 이용 조건을 확인한다.
+공식 문서에 좌표 숫자 예시가 없어 실제 응답의 단위는 미확인이다. DEGREES/E7을 명시적으로 설정하며 기본 UNCONFIRMED에서는 호출하지 않는다. 실제 응답으로 확인하고 오래된 예제의 변환 공식을 무조건 재사용하지 않는다. 검색 결과의 표시·변환도 적용되는 이용 조건을 확인한다.
 
 ### 7.3 검색 결과를 저장하는가?
 
@@ -159,10 +161,10 @@ PATCH의 필드 누락은 기존 값 유지, 명시적 null은 제거 등으로 
 
 | 계층 | 예시 구성요소 | 역할 |
 |---|---|---|
-| presentation | PlaceController·LocationResponse·PlaceExceptionHandler | 조회 GET·기존 응답 필드 변환·안전한 오류 |
-| application | PlaceQueryService·ModelLocationQueryService, 후속 PlaceSearchService·선택적 PlaceCommandService | ID·모델 코드 내부 조회, 후속 외부 검색·변경 |
+| presentation | PlaceController·PlaceSearchController·조회 DTO·오류 처리 | 실내 조회·인증된 외부 검색·안전한 오류 |
+| application | PlaceQueryService·ModelLocationQueryService·PlaceSearchService·PlaceSearchLimiter | ID·모델 코드 내부 조회·외부 검색·호출 한도 |
 | domain | 건물·층·장소·시설·매핑 | 장소 규칙 |
-| infrastructure | PlacePersistenceAdapter·ModelLocationPersistenceAdapter·PlaceReadRepository·기존 JPA 저장소 | 읽기 전용 트랜잭션·모델 매핑·JPQL JOIN 조회. 네이버 어댑터는 후속 |
+| infrastructure | PlacePersistenceAdapter·ModelLocationPersistenceAdapter·PlaceReadRepository·기존 JPA 저장소 | 읽기 전용 트랜잭션·모델 매핑·JPQL JOIN 조회. NaverLocalSearchClient가 외부 통신·변환 담당 |
 
 다른 모듈에 공개할 기능의 예:
 
@@ -192,9 +194,9 @@ PlaceQueryService의 ID 기반 조회와 ModelLocationQueryService의 모델 코
 - [x] 계층 범위·비활성 제외·페이지 제한·슬래시·변경 차단과 전체 목록 SQL 1회/층별 SQL 2회를 검증했다.
 - [x] 모델 키·버전·코드의 내부 조회와 입력·누락·비활성 처리를 합성 데이터로 검증했다.
 - [ ] 실제 모델 코드의 의미·적용 구역을 확인해 매핑 데이터를 등록하고 통신을 연결한다.
-- [ ] 네이버 검색을 앱 지도 표시와 분리해 연동한다.
-- [ ] 결과 개수·빈 결과·외부 장애를 구분한다.
-- [ ] 검색만으로 DB에 외부 결과가 누적되지 않는다.
+- [x] 네이버 검색용 HTTP 클라이언트와 API를 구현하고 로컬 모의 서버로 검증했다. 실제 키·앱 연동은 미검증이다.
+- [x] 결과 개수·빈 결과·외부 장애를 구분한다.
+- [x] 검색만으로 DB에 외부 결과가 누적되지 않는 것을 임시 MySQL로 확인했다.
 - [ ] 외부 저장·캐시 정책과 실제 응답 규격을 확인한다.
 - [ ] 자체 실외 장소 관리 여부와 기존 데이터 보존·API 전환을 결정한다.
 - [ ] 자체 관리를 채택하면 좌표·권한·트랜잭션·참조·PATCH를 테스트한다.

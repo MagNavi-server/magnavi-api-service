@@ -100,7 +100,7 @@ Content-Type: application/json
 - JWT 내용은 암호화된 비밀 정보가 아니다. 비밀번호·이메일·전화번호는 넣지 않는다.
 - 토큰은 Authorization 헤더로만 받는다. URL의 `access_token`이나 세션 쿠키는 사용하지 않는다.
 
-키를 바꾸면 기존 토큰은 더 이상 검증되지 않는다. 재발급·로그아웃·개별 토큰 즉시 폐기 API는 이번 범위에 없다. 만료되면 다시 로그인한다. 현재 접근 정책은 이 문서의 회원 API와 상태 확인만 허용한다.
+키를 바꾸면 기존 토큰은 더 이상 검증되지 않는다. 재발급·로그아웃·개별 토큰 즉시 폐기 API는 이번 범위에 없다. 만료되면 다시 로그인한다. 현재 접근 정책은 이 문서의 회원 API, 상태 확인, 4-1단계 [실내 장소 조회 API](PLACE_API.md)를 허용한다.
 
 검증 방식 참고: [Spring Security JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html), [비밀번호 저장](https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html).
 

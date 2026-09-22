@@ -15,7 +15,7 @@ import com.example.magnavi_springserver.shared.error.SecurityErrorResponseWriter
 import com.example.magnavi_springserver.shared.security.AuthenticatedMember;
 
 /**
- * 가입·로그인·최소 상태 확인을 공개하고, 본인 정보 API에는 검증된 JWT를 요구한다.
+ * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보에는 검증된 JWT를 요구한다.
  */
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
@@ -48,6 +48,13 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .requestMatchers(HttpMethod.POST, "/users/signup", "/users/login").permitAll()
+                        // 기존 장소 조회처럼 GET만 공개한다. 등록·수정·삭제나 하위 경로 전체를 열지 않는다.
+                        .requestMatchers(HttpMethod.GET,
+                                "/buildings", "/buildings/", "/buildings/{buildingId}", "/buildings/{buildingId}/",
+                                "/buildings/{buildingId}/floors", "/buildings/{buildingId}/floors/",
+                                "/floors/{floorId}", "/floors/{floorId}/",
+                                "/floors/{floorId}/locations", "/floors/{floorId}/locations/",
+                                "/locations", "/locations/", "/locations/{locationId}", "/locations/{locationId}/").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/me").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/users/me/username").authenticated()
                         .anyRequest().denyAll())

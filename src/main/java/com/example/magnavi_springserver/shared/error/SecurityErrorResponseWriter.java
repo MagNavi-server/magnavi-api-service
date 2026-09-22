@@ -29,6 +29,9 @@ public class SecurityErrorResponseWriter {
             return;
         }
         response.setStatus(status);
+        if (status == 401) {
+            response.setHeader("WWW-Authenticate", "Bearer");
+        }
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(),

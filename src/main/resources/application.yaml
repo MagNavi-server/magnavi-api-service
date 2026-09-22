@@ -25,6 +25,14 @@ spring:
     init:
       mode: never
 
+magnavi:
+  jwt:
+    # 실제 키는 저장소에 넣지 않는다. 값이 없거나 약하면 서버 시작을 거절한다.
+    secret-base64: ${JWT_SECRET_BASE64:}
+    issuer: ${JWT_ISSUER:magnavi-api-service}
+    audience: ${JWT_AUDIENCE:magnavi-api}
+    access-token-ttl: 30m
+
 server:
   shutdown: graceful
 

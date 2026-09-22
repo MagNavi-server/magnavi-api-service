@@ -1,8 +1,8 @@
 # place — 장소 정보 모듈
 
-최초 작성일: 2026-09-10 · 실내 조회 API 반영일: 2026-09-21
+최초 작성일: 2026-09-10 · 실내 조회 API 반영일: 2026-09-21 · 모델 매핑 내부 조회 반영일: 2026-09-22
 
-현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 4-1단계에서 건물·층·활성 장소 GET 7개와 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository·조회 DTO를 구현했다. 모델 매핑 조회·네이버 연동은 후속 구현이다. [조회 API 안내](../api/PLACE_API.md)에 실행 순서와 요청·응답을 정리했다.
+현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 4-1단계에서 건물·층·활성 장소 GET 7개와 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository·조회 DTO를 구현했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter로 모델 매핑 내부 조회를 구현했다. 네이버 연동은 후속 구현이다. [조회 API 안내](../api/PLACE_API.md)에 실행 순서와 요청·응답을 정리했다.
 
 [전체 모듈 안내](README.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 
@@ -82,7 +82,9 @@ outdoor_places와 place_facilities는 자체 실외 장소·시설 관리를 선
 
 ## 6. 모델 위치 코드를 장소로 바꾸는 흐름
 
-예시: positioning이 선택한 모델 범위에서 버전 `v1`, 위치 코드 `205`를 전달받았다. 실제 매핑 키에는 model_key·model_version·location_code를 함께 사용한다.
+4-2단계의 내부 조회는 구현했다. 실제 Python 통신과 positioning 호출 연결은 후속 단계다. [내부 조회 안내](../api/MODEL_LOCATION_MAPPING.md)에 입력 제한·오류·검증을 정리했다.
+
+향후 연결 예시: positioning이 선택한 모델 범위에서 버전 `v1`, 위치 코드 `205`를 전달받았다. 실제 매핑 키에는 model_key·model_version·location_code를 함께 사용한다.
 
 1. positioning이 필요한 경우 place의 공개 조회 기능을 호출한다.
 2. place는 모델 버전과 위치 코드에 맞는 매핑을 확인한다.
@@ -99,7 +101,7 @@ outdoor_places와 place_facilities는 자체 실외 장소·시설 관리를 선
 
 모델 코드와 DB PK가 우연히 같은 숫자일 수 있지만 같은 개념으로 가정하지 않는다. DB PK가 바뀌거나 다른 건물이 추가되어도 매핑이 잘못 연결되지 않아야 한다.
 
-코드가 모델·건물마다 겹칠 수 있다면 매핑 키에 버전과 범위를 포함한다. 없는 코드를 임의로 0번 장소에 연결하지 않는다.
+매핑 키에는 모델 범위·버전·코드를 모두 사용한다. 대소문자·공백·앞자리 0을 보존하며, 누락·비활성 장소는 NOT_FOUND로 처리한다. 없는 코드를 임의로 0번 장소나 다른 버전에 연결하지 않는다. 현재 성공 조회는 SQL 2회이고 자체 캐시는 없다.
 
 센서가 들어올 때마다 장소 DB를 다시 조회할 필요는 없다. 별도 장소 조회 API나 검증된 캐시를 사용할 수 있으며, 캐시를 쓰면 매핑 갱신 시 만료·교체 정책도 함께 정한다.
 
@@ -158,18 +160,18 @@ PATCH의 필드 누락은 기존 값 유지, 명시적 null은 제거 등으로 
 | 계층 | 예시 구성요소 | 역할 |
 |---|---|---|
 | presentation | PlaceController·LocationResponse·PlaceExceptionHandler | 조회 GET·기존 응답 필드 변환·안전한 오류 |
-| application | PlaceQueryService, PlaceSearchService, 선택적 PlaceCommandService | 내부 조회·외부 검색·선택적 변경 |
+| application | PlaceQueryService·ModelLocationQueryService, 후속 PlaceSearchService·선택적 PlaceCommandService | ID·모델 코드 내부 조회, 후속 외부 검색·변경 |
 | domain | 건물·층·장소·시설·매핑 | 장소 규칙 |
-| infrastructure | PlacePersistenceAdapter·PlaceReadRepository·기존 JPA 저장소 | 읽기 전용 트랜잭션·JPQL JOIN 조회. 모델 매핑 조회·네이버 어댑터는 후속 |
+| infrastructure | PlacePersistenceAdapter·ModelLocationPersistenceAdapter·PlaceReadRepository·기존 JPA 저장소 | 읽기 전용 트랜잭션·모델 매핑·JPQL JOIN 조회. 네이버 어댑터는 후속 |
 
 다른 모듈에 공개할 기능의 예:
 
 | 공개 기능 예시 | 호출하는 쪽 | 반환할 내용 |
 |---|---|---|
 | `PlaceQueryService.getLocation(locationId)` | favorite 등에서 향후 사용 가능 | 활성 장소와 건물·층을 담은 IndoorLocationInfo |
-| `LocationResolver.resolve(...)` | positioning | 모델 코드에 맞는 실내 장소 요약 |
+| `ModelLocationQueryService.findLocation(modelKey, modelVersion, locationCode)` | positioning에서 향후 사용 가능 | 활성 장소와 건물·층을 담은 IndoorLocationInfo |
 
-PlaceQueryService의 ID 기반 조회는 구현했고 LocationResolver는 후속 제안이다. 다른 모듈에는 읽기 결과 DTO를 반환하고, 내부 JPA 엔티티나 수정용 Repository를 넘기지 않는다.
+PlaceQueryService의 ID 기반 조회와 ModelLocationQueryService의 모델 코드 조회를 구현했다. positioning과의 실제 호출 연결은 후속 단계다. 다른 모듈에는 읽기 결과 DTO를 반환하고, 내부 JPA 엔티티나 수정용 Repository를 넘기지 않는다.
 
 네이버 응답 객체를 favorite나 앱에 기술 의존성 그대로 퍼뜨리지 않는다. 필요한 검색 결과 DTO와 선택 정보의 검증 규격을 공개한다. 외부 결과에 내부 장소 FK가 있다고 가정하지 않는다.
 
@@ -188,7 +190,8 @@ PlaceQueryService의 ID 기반 조회는 구현했고 LocationResolver는 후속
 
 - [x] 건물·층·실내 목록·상세를 임시 MySQL의 합성 자료로 검증했다.
 - [x] 계층 범위·비활성 제외·페이지 제한·슬래시·변경 차단과 전체 목록 SQL 1회/층별 SQL 2회를 검증했다.
-- [ ] 실제 모델 코드의 의미와 장소 매핑 조회를 구현·검증한다.
+- [x] 모델 키·버전·코드의 내부 조회와 입력·누락·비활성 처리를 합성 데이터로 검증했다.
+- [ ] 실제 모델 코드의 의미·적용 구역을 확인해 매핑 데이터를 등록하고 통신을 연결한다.
 - [ ] 네이버 검색을 앱 지도 표시와 분리해 연동한다.
 - [ ] 결과 개수·빈 결과·외부 장애를 구분한다.
 - [ ] 검색만으로 DB에 외부 결과가 누적되지 않는다.

@@ -10,7 +10,7 @@
 
 이번 설계에는 기존 일반 로그인 유지안, 카카오·구글 로그인, 네이버 지역 검색을 반영했다. 외부 검색 결과의 저장과 자체 실외 장소 관리는 조건부 항목이다.
 
-현재는 실행·테스트 기반, 8개 업무 테이블, 일반 회원·JWT, 건물·층·실내 장소 조회를 구현했다. 모델 매핑 조회·네이버 검색·소셜 로그인·즐겨찾기·실시간 API는 후속 구현 목표다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
+현재는 실행·테스트 기반, 8개 업무 테이블, 일반 회원·JWT, 건물·층·실내 장소 조회와 모델 코드 매핑 내부 조회를 구현했다. 네이버 검색·소셜 로그인·즐겨찾기·실시간 API는 후속 구현 목표다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
 
 ## 1. 이 서버는 어떤 역할인가?
 
@@ -45,7 +45,7 @@ MagNavi_SpringServer/
 ├── src/main/java/com/example/magnavi_springserver/
 │   ├── MagNaviSpringServerApplication.java
 │   ├── member/            # 일반 회원 API·JWT·엔티티·저장소, 소셜 인증은 빈 골격
-│   ├── place/             # 실내 조회 API·엔티티·저장소, 모델 매핑 조회는 후속
+│   ├── place/             # 실내 조회 API·모델 매핑 내부 조회·엔티티·저장소
 │   ├── favorite/          # 유형별 즐겨찾기 엔티티·소유 회원 조회 저장소
 │   ├── positioning/       # 4개 계층의 빈 클래스
 │   ├── shared/            # 오류·요청 추적·공통 ID/UTC 시각·값 검사
@@ -78,7 +78,7 @@ MagNavi_SpringServer/
     └── SHARED.md          # 최소 공통 지원 영역
 ```
 
-초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 4-1단계에서 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository와 조회 DTO를 연결했다. 소셜 인증·네이버 검색·즐겨찾기·실시간 클래스와 WebSocket·gRPC 설정은 빈 골격이며 모델 매핑 조회도 후속 작업이다.
+초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 4-1단계에서 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository와 조회 DTO를 연결했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter를 추가해 모델 키·버전·코드를 활성 장소로 연결하는 내부 조회를 구현했다. 소셜 인증·네이버 검색·즐겨찾기·실시간 클래스와 WebSocket·gRPC 설정은 빈 골격이다.
 
 공통·local·test·prod 설정과 개발용 MySQL Compose, Testcontainers 테스트를 추가했다. 기본 테스트는 MySQL 연결·상태 확인·접근 정책을 검증하도록 바꿨고 오류 변환·동시 요청 추적 테스트를 추가했다. JPA는 `validate`, 스키마 변경은 Flyway 기준이다. V1~V3 SQL과 엔티티를 실제 MySQL 8.4.8에서 검증했다. 새 DB 구조부터 구현하며 기존 FastAPI 데이터 이관은 후속 작업으로 분리했다.
 
@@ -105,7 +105,7 @@ MagNavi_SpringServer/
 
 소셜 로그인 방식에 따라 OAuth2 Client 등 추가 의존성을 검토한다. 현재 Resource Server 의존성만으로 카카오·구글 가입·계정 연결이 완성되지는 않는다.
 
-의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 일반 로그인·JWT는 별도 구현을 마쳤고 WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 후속 작업이다. Java 21에서 전체 Gradle 빌드와 기반·DB·회원·장소 테스트 83개를 통과했다. 이 검증은 아직 없는 계약 생성이나 실제 모델 연동을 포함하지 않는다.
+의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 일반 로그인·JWT는 별도 구현을 마쳤고 WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 후속 작업이다. Java 21에서 전체 Gradle 빌드와 기반·DB·회원·장소·모델 매핑 테스트 97개를 통과했다. 이 검증은 아직 없는 계약 생성이나 실제 모델 연동을 포함하지 않는다.
 
 ## 3. 제공할 기능
 

@@ -1,8 +1,8 @@
 # place — 장소 정보 모듈
 
-최초 작성일: 2026-09-10 · DB 기반 반영일: 2026-09-20
+최초 작성일: 2026-09-10 · 실내 조회 API 반영일: 2026-09-21
 
-현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 아래 장소 API·공개 조회 계약·네이버 연동·기존 PlacePersistenceAdapter는 후속 구현이다.
+현재 구현: Building·Floor·IndoorLocation·ModelLocationMapping의 JPA 매핑과 내부 저장소 4개를 구현했다. 건물별 층 번호, 모델 키·버전·코드의 고유성과 실제 FK를 검증했다. 모델 코드와 내부 PK는 분리하며 실제 모델 구역 매핑 데이터는 아직 등록하지 않았다. 4-1단계에서 건물·층·활성 장소 GET 7개와 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository·조회 DTO를 구현했다. 모델 매핑 조회·네이버 연동은 후속 구현이다. [조회 API 안내](../api/PLACE_API.md)에 실행 순서와 요청·응답을 정리했다.
 
 [전체 모듈 안내](README.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 
@@ -30,14 +30,17 @@ place는 “장소가 어디에 있고 어떤 곳인가?”를 알려 주는 모
 
 | 기능 | 기존 경로 또는 구분 | 방향 |
 |---|---|---|
-| 실내 목록 | GET /locations/ | 이관 |
-| 실내 상세 | GET /locations/{location_id} | 이관 |
+| 건물 목록·상세 | GET /buildings, GET /buildings/{buildingId} | 4-1 구현 |
+| 건물별 층 목록·층 상세 | GET /buildings/{buildingId}/floors, GET /floors/{floorId} | 4-1 구현 |
+| 층별 장소 목록 | GET /floors/{floorId}/locations | 4-1 구현 |
+| 실내 목록 | GET /locations/ | 4-1 구현 |
+| 실내 상세 | GET /locations/{location_id} | 4-1 구현, 새 DB의 내부 장소 ID 사용 |
 | 네이버 장소 검색 | 신규. GET /places/search?query=...는 경로 예시 | place의 검색 서비스로 구현 |
 | 실외 등록·목록·상세·수정·삭제 | 기존 /outdoor-places/ 계열 | 자체 관리 필요성과 앱 호환에 따라 이관·보류 결정 |
 
 네이버 검색을 도입했다고 기존 실외 장소 데이터나 API가 자동으로 없어지는 것은 아니다. 사용 중인 앱·시설 데이터의 보존과 전환을 확인해야 한다.
 
-실내 장소 관리자용 등록·수정·삭제 API도 별도 결정 사항이다. 기준 데이터는 검증된 마이그레이션이나 관리 절차로 준비할 수 있다.
+실내 장소 관리자용 등록·수정·삭제 API도 별도 결정 사항이다. 기준 데이터는 검증된 마이그레이션이나 관리 절차로 준비할 수 있다. 이번에는 실제 자료나 임의 예시를 개발/운영 DB에 등록하지 않았다. 모든 조회 GET은 기존 FastAPI처럼 로그인 없이 허용하며 변경 API는 제공하지 않는다.
 
 ## 4. 어떤 데이터를 관리하는가?
 
@@ -45,7 +48,7 @@ place는 “장소가 어디에 있고 어떤 곳인가?”를 알려 주는 모
 |---|---|
 | buildings | 건물 ID·이름·주소 |
 | floors | 층 ID·건물 ID·층 번호 |
-| indoor_locations | 장소 ID·층 ID·이름·설명·기존 코드 |
+| indoor_locations | 장소 ID·층 ID·이름·설명·활성 여부 |
 | model_location_mappings | 모델 키·버전·위치 코드·실내 장소 ID |
 
 outdoor_places와 place_facilities는 자체 실외 장소·시설 관리를 선택할 때만 만든다. 네이버 검색을 실행할 때마다 이 테이블에 결과를 넣지 않는다.
@@ -75,7 +78,7 @@ outdoor_places와 place_facilities는 자체 실외 장소·시설 관리를 선
 장소 ID → 장소 조회 → 건물·층 등 필요한 정보 조합 → 상세 응답
 ```
 
-페이지 크기는 한 번에 가져올 목록 개수다. 제한 없이 전체 데이터를 읽지 않도록 최대 크기와 정렬 기준을 정한다.
+현재 목록은 기존 skip·limit 형식의 배열 응답을 유지한다. skip은 기본 0·최대 10,000, limit은 기본/최대 100·최소 1이다. 건물·장소는 ID순, 층은 층 번호·ID순으로 정렬한다. 없는 부모는 404, 존재하지만 자식이 없는 부모는 빈 배열로 구분한다. 비활성 장소는 목록·상세에서 제외하며 실제 DB 행은 삭제하지 않는다. 끝의 슬래시 유무를 모두 지원한다.
 
 ## 6. 모델 위치 코드를 장소로 바꾸는 흐름
 
@@ -154,19 +157,19 @@ PATCH의 필드 누락은 기존 값 유지, 명시적 null은 제거 등으로 
 
 | 계층 | 예시 구성요소 | 역할 |
 |---|---|---|
-| presentation | 장소 Controller·DTO | HTTP 요청·응답 |
+| presentation | PlaceController·LocationResponse·PlaceExceptionHandler | 조회 GET·기존 응답 필드 변환·안전한 오류 |
 | application | PlaceQueryService, PlaceSearchService, 선택적 PlaceCommandService | 내부 조회·외부 검색·선택적 변경 |
 | domain | 건물·층·장소·시설·매핑 | 장소 규칙 |
-| infrastructure | JPA 저장소·모델 매핑·네이버 검색 어댑터 | DB·외부 검색 연결 |
+| infrastructure | PlacePersistenceAdapter·PlaceReadRepository·기존 JPA 저장소 | 읽기 전용 트랜잭션·JPQL JOIN 조회. 모델 매핑 조회·네이버 어댑터는 후속 |
 
 다른 모듈에 공개할 기능의 예:
 
 | 공개 기능 예시 | 호출하는 쪽 | 반환할 내용 |
 |---|---|---|
-| `PlaceQuery.findPlace(...)` | favorite | 장소 존재 여부와 최소 표시 정보 |
+| `PlaceQueryService.getLocation(locationId)` | favorite 등에서 향후 사용 가능 | 활성 장소와 건물·층을 담은 IndoorLocationInfo |
 | `LocationResolver.resolve(...)` | positioning | 모델 코드에 맞는 실내 장소 요약 |
 
-위 이름은 제안이다. 다른 모듈에는 읽기 결과 DTO를 반환하고, 내부 JPA 엔티티나 수정용 Repository를 넘기지 않는다.
+PlaceQueryService의 ID 기반 조회는 구현했고 LocationResolver는 후속 제안이다. 다른 모듈에는 읽기 결과 DTO를 반환하고, 내부 JPA 엔티티나 수정용 Repository를 넘기지 않는다.
 
 네이버 응답 객체를 favorite나 앱에 기술 의존성 그대로 퍼뜨리지 않는다. 필요한 검색 결과 DTO와 선택 정보의 검증 규격을 공개한다. 외부 결과에 내부 장소 FK가 있다고 가정하지 않는다.
 
@@ -183,7 +186,9 @@ PATCH의 필드 누락은 기존 값 유지, 명시적 null은 제거 등으로 
 | 잘못된 입력·좌표 | 입력 오류 |
 | 자체 장소 변경 권한 없음·참조 중 삭제 | 합의한 접근·삭제 정책 |
 
-- [ ] 실내 목록·상세와 모델 매핑을 검증한다.
+- [x] 건물·층·실내 목록·상세를 임시 MySQL의 합성 자료로 검증했다.
+- [x] 계층 범위·비활성 제외·페이지 제한·슬래시·변경 차단과 전체 목록 SQL 1회/층별 SQL 2회를 검증했다.
+- [ ] 실제 모델 코드의 의미와 장소 매핑 조회를 구현·검증한다.
 - [ ] 네이버 검색을 앱 지도 표시와 분리해 연동한다.
 - [ ] 결과 개수·빈 결과·외부 장애를 구분한다.
 - [ ] 검색만으로 DB에 외부 결과가 누적되지 않는다.

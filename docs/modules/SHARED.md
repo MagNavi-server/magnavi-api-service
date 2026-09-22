@@ -87,7 +87,7 @@ traceId에 회원 ID나 위치를 그대로 넣지 않는다. 오류 메시지�
 
 현재 `GlobalExceptionHandler`가 MVC 오류를, `SecurityErrorResponseWriter`가 보안 필터 오류를 같은 규격으로 변환한다. `SecurityConfig`에서 `AuthenticationEntryPoint`와 `AccessDeniedHandler`를 연결했다. 컨테이너의 내부 `/error` 처리는 `ApiErrorController`가 담당한다.
 
-MVC의 400·404·405·415 같은 상태와 필요한 헤더를 유지하고 예외 상세는 공개하지 않는다. Bean Validation 실패는 필드명과 안전한 안내만 반환한다. 상태 확인 GET 두 개와 일반 가입·로그인 POST를 공개하고, 내 정보 조회·이름 변경은 JWT로 보호한다. 나머지 경로는 기본 거절한다. JWT는 HS256 서명·issuer·audience·exp·iat·nbf·양수 회원 번호를 확인한다.
+MVC의 400·404·405·415 같은 상태와 필요한 헤더를 유지하고 예외 상세는 공개하지 않는다. Bean Validation 실패는 필드명과 안전한 안내만 반환한다. 상태 확인 GET 두 개, 일반 가입·로그인 POST, 건물·층·활성 장소 조회 GET 7개를 공개하고, 내 정보 조회·이름 변경은 JWT로 보호한다. 나머지 경로는 기본 거절한다. JWT는 HS256 서명·issuer·audience·exp·iat·nbf·양수 회원 번호를 확인한다.
 
 ### 4.2 WebSocket 오류도 HTTP 응답으로 보내는가?
 

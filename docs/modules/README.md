@@ -4,7 +4,7 @@
 
 이 폴더는 MagNavi Spring 서버를 모듈러 모놀리스로 구현하기 위한 설명서다. 처음 읽는 사람도 기능과 처리 흐름을 이해할 수 있도록 작성했다.
 
-초기에는 아래 계층을 위한 빈 클래스 39개를 준비했다. 이후 공통 오류·요청 추적·기본 보안과 실행·테스트 설정을 구현했으며, 2단계에서는 8개 업무 엔티티·JPA 저장소와 Flyway SQL 3개를 구현했다. 3-1단계에서 일반 회원 서비스·API·JWT 인증을 구현했으며 소셜 인증·다른 업무 API·실시간 연동은 후속 작업이다. 전체 작업 순서는 [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md), 현재 실행 방법은 [README](../../README.md), 테이블·컬럼·저장 정책은 [DB 스키마 설계](../../DATABASE_SCHEMA.md)를 참고한다.
+초기에는 아래 계층을 위한 빈 클래스 39개를 준비했다. 이후 공통 오류·요청 추적·기본 보안과 실행·테스트 설정을 구현했으며, 2단계에서는 8개 업무 엔티티·JPA 저장소와 Flyway SQL 3개를 구현했다. 3-1단계에서 일반 회원·JWT, 4-1단계에서 건물·층·활성 장소 조회를 구현했다. 모델 매핑 조회·네이버 검색·소셜 인증·다른 업무 API·실시간 연동은 후속 작업이다. 전체 작업 순서는 [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md), 현재 실행 방법은 [README](../../README.md), 테이블·컬럼·저장 정책은 [DB 스키마 설계](../../DATABASE_SCHEMA.md)를 참고한다.
 
 ## 1. 모듈러 모놀리스는 무엇인가?
 
@@ -142,8 +142,8 @@ DB에 외래 키가 있다고 다른 모듈의 Repository를 직접 호출해도
 | shared | 3 | ErrorResponse, AuthenticatedMember, TraceIdGenerator |
 | config | 3 | SecurityConfig, WebSocketConfig, GrpcClientConfig |
 
-위 표는 초기 골격의 수다. 이후 member·place·favorite의 도메인 8개를 JPA 엔티티로 구현하고 각 모듈 infrastructure/persistence에 저장소 8개를 추가했다. 일반 회원 서비스·API·MemberPersistenceAdapter는 3-1단계에서 구현했다. 다른 모듈의 업무 서비스·API·어댑터와 positioning은 빈 골격으로 남아 있다. 선택 사항인 자체 실외 장소·시설 클래스는 미리 만들지 않았다.
+위 표는 초기 골격의 수다. 이후 member·place·favorite의 도메인 8개를 JPA 엔티티로 구현하고 각 모듈 infrastructure/persistence에 저장소 8개를 추가했다. 일반 회원 서비스·API·MemberPersistenceAdapter는 3-1단계에서 구현했다. 4-1단계에서 장소 조회 API·서비스·어댑터와 JPQL 조회 저장소도 구현했다. 외부 검색·즐겨찾기·positioning은 빈 골격으로 남아 있다. 선택 사항인 자체 실외 장소·시설 클래스는 미리 만들지 않았다.
 
 1단계에서는 `ErrorResponse`, `TraceIdGenerator`, `SecurityConfig`를 구현하고 MVC·보안·서블릿 오류 처리와 요청 추적 필터를 추가했다. `AuthenticatedMember`와 JWT 발급·검증 설정은 3-1단계에서 구현했다. `WebSocketConfig`, `GrpcClientConfig`는 빈 골격이다. 자세한 현재 공통 동작은 [shared](SHARED.md)를 참고한다.
 
-전체 테스트 65개는 기존 기반·DB 검증에 일반 가입·로그인·JWT·본인 정보 접근·BCrypt 호환 검증을 더한다. 소셜 인증·실제 앱·모델 연동은 포함하지 않는다.
+전체 테스트 83개는 기존 기반·DB·회원 검증에 실내 조회·계층 범위·비활성 제외·페이지 제한·SQL 횟수 검증을 더한다. 소셜 인증·실제 앱·모델 연동은 포함하지 않는다.

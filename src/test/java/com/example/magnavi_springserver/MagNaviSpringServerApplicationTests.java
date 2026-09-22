@@ -77,15 +77,16 @@ class MagNaviSpringServerApplicationTests {
                 .andExpect(header().doesNotExist("Location"))
                 .andReturn();
         assertThat(result.getRequest().getSession(false)).isNull();
-        mockMvc.perform(post("/users/signup"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        // 가입은 공개했지만 JSON 형식과 입력 검사는 통과해야 한다.
+        mockMvc.perform(post("/users/signup").contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     /** 아직 허용하지 않은 업무 경로는 테스트 인증 주체에게도 열리지 않는다. */
     @Test
     void rejectsAuthenticatedRequestsUntilAnEndpointIsExplicitlyAllowed() throws Exception {
-        mockMvc.perform(get("/users/me").with(user("test-member")))
+        mockMvc.perform(get("/favorites").with(user("test-member")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }

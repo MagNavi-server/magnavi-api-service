@@ -2,7 +2,7 @@
 
 MagNavi의 회원·장소·즐겨찾기와 실시간 측정 연결을 담당할 Spring 서버다. 서버 역할과 목표 구조는 [프로젝트 개요](PROJECT_OVERVIEW.md), 후속 작업은 [구현 계획](IMPLEMENTATION_PLAN.md)을 참고한다.
 
-현재는 **1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 장소 조회**를 구현했다. 회원 API 4개와 건물·층·활성 장소 조회 API 7개를 제공한다. 모델 코드 매핑 조회·네이버 검색·소셜 로그인·즐겨찾기 API·실시간 통신은 후속 단계다. [회원 API 안내](docs/api/MEMBER_API.md)와 [장소 조회 안내](docs/api/PLACE_API.md)에 요청·응답·오류를 정리했다.
+현재는 **1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 장소 조회, 4-2단계 모델 코드 매핑 조회**를 구현했다. 회원 API 4개와 건물·층·활성 장소 조회 API 7개를 제공한다. 모델 코드 매핑은 Spring 내부 메서드로 제공한다. 네이버 검색·소셜 로그인·즐겨찾기 API·실시간 통신은 후속 단계다. [회원 API 안내](docs/api/MEMBER_API.md)와 [장소 조회 안내](docs/api/PLACE_API.md)에 요청·응답·오류를 정리했다.
 
 ## 1. 준비 환경
 
@@ -142,10 +142,13 @@ Testcontainers는 테스트용 MySQL을 임시 포트로 실행하고 종료 시
 
 2026-09-21의 4-1단계에서는 장소 통합 테스트 18개를 추가해 전체 **83개 테스트**와 `./gradlew build`를 통과했다. 계층별 조회·활성 장소 필터·입력 범위·슬래시 호환·변경 API 차단을 확인했고, 장소 100개 응답도 전체 목록 SQL 1회·층별 목록 SQL 2회로 처리됨을 검증했다. 기존 DB·Flyway SQL·Python은 변경하지 않았다.
 
+2026-09-22의 4-2단계에서는 모델 매핑 통합 테스트 14개를 추가해 전체 **97개 테스트**와 `./gradlew build`를 통과했다. 모델 키·버전·코드의 정확한 구분, 입력 제한, 연결 누락·비활성 처리, SQL 2회 조회와 쓰기 없음을 확인했다. [내부 조회 사용 안내](docs/api/MODEL_LOCATION_MAPPING.md)에 호출 방법과 오류를 정리했다. 실제 매핑 데이터 등록·Python/gRPC 통신·캐시는 후속 작업이며 기존 SQL·API는 유지했다.
+
 ## 7. 관련 문서
 
 - [일반 회원 API 요청·응답·오류](docs/api/MEMBER_API.md)
 - [건물·층·실내 장소 조회 API](docs/api/PLACE_API.md)
+- [모델 코드 → 장소 내부 조회](docs/api/MODEL_LOCATION_MAPPING.md)
 
 - [프로젝트 개요](PROJECT_OVERVIEW.md)
 - [구현 계획](IMPLEMENTATION_PLAN.md)

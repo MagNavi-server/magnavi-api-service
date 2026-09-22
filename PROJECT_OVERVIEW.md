@@ -10,7 +10,7 @@
 
 이번 설계에는 기존 일반 로그인 유지안, 카카오·구글 로그인, 네이버 지역 검색을 반영했다. 외부 검색 결과의 저장과 자체 실외 장소 관리는 조건부 항목이다.
 
-현재는 실행·테스트 기반과 8개 업무 테이블의 DB 저장 기반을 구현했다. 아래 회원·장소·즐겨찾기·실시간 API 기능은 구현 목표이며 아직 업무 API는 동작하지 않는다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
+현재는 실행·테스트 기반, 8개 업무 테이블, 일반 회원가입·로그인·JWT·내 정보·이름 변경을 구현했다. 소셜 로그인·장소·즐겨찾기·실시간 API는 후속 구현 목표다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
 
 ## 1. 이 서버는 어떤 역할인가?
 
@@ -44,12 +44,12 @@ MagNavi_SpringServer/
 ├── .env.example          # 값 없는 개발 환경변수 예시
 ├── src/main/java/com/example/magnavi_springserver/
 │   ├── MagNaviSpringServerApplication.java
-│   ├── member/            # 회원·인증 정보의 엔티티·저장소, 서비스·API는 빈 골격
+│   ├── member/            # 일반 회원 API·JWT·엔티티·저장소, 소셜 인증은 빈 골격
 │   ├── place/             # 실내 장소·모델 매핑의 엔티티·저장소
 │   ├── favorite/          # 유형별 즐겨찾기 엔티티·소유 회원 조회 저장소
 │   ├── positioning/       # 4개 계층의 빈 클래스
 │   ├── shared/            # 오류·요청 추적·공통 ID/UTC 시각·값 검사
-│   └── config/            # 기본 보안 구현, WebSocket·gRPC 설정은 빈 골격
+│   └── config/            # 접근 정책·JWT 설정 구현, WebSocket·gRPC는 빈 골격
 ├── src/main/resources/
 │   ├── application.yaml
 │   ├── application-local.yaml
@@ -59,7 +59,7 @@ MagNavi_SpringServer/
 │   ├── MagNaviSpringServerApplicationTests.java # 격리 MySQL·상태·접근 정책
 │   ├── support/           # Testcontainers MySQL 설정
 │   ├── persistence/       # 마이그레이션·8개 엔티티·DB 제약·트랜잭션 검증
-│   ├── member/            # 이하 API별 테스트 폴더는 비어 있음
+│   ├── member/            # 회원 API·JWT 설정·BCrypt 검증 23개
 │   ├── place/
 │   ├── favorite/
 │   ├── positioning/
@@ -78,11 +78,11 @@ MagNavi_SpringServer/
     └── SHARED.md          # 최소 공통 지원 영역
 ```
 
-초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 업무 서비스·API·기존 PersistenceAdapter, 실시간 클래스, `AuthenticatedMember`, WebSocket·gRPC 설정은 빈 골격이다.
+초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 소셜 인증, 다른 업무 API·어댑터, 실시간 클래스와 WebSocket·gRPC 설정은 빈 골격이다.
 
 공통·local·test·prod 설정과 개발용 MySQL Compose, Testcontainers 테스트를 추가했다. 기본 테스트는 MySQL 연결·상태 확인·접근 정책을 검증하도록 바꿨고 오류 변환·동시 요청 추적 테스트를 추가했다. JPA는 `validate`, 스키마 변경은 Flyway 기준이다. V1~V3 SQL과 엔티티를 실제 MySQL 8.4.8에서 검증했다. 새 DB 구조부터 구현하며 기존 FastAPI 데이터 이관은 후속 작업으로 분리했다.
 
-현재 공개한 경로는 생존·준비 상태 확인 GET 두 개뿐이다. 나머지는 기본 거절하고 임시 로그인 사용자·세션·JWT 발급 및 검증을 제공하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. 운영 배포용 이미지·Compose·CI/CD는 구현 전이다.
+생존·준비 상태 확인 GET 두 개와 일반 가입·로그인 POST를 공개한다. 내 정보 GET·이름 변경 PUT는 JWT로 보호하고 나머지 경로는 기본 거절한다. 임시 로그인 사용자·세션 인증은 사용하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. 운영 배포용 이미지·Compose·CI/CD는 구현 전이다.
 
 ### 2.1 선언된 기술과 의존성
 
@@ -105,7 +105,7 @@ MagNavi_SpringServer/
 
 소셜 로그인 방식에 따라 OAuth2 Client 등 추가 의존성을 검토한다. 현재 Resource Server 의존성만으로 카카오·구글 가입·계정 연결이 완성되지는 않는다.
 
-의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 특히 로그인·JWT 발급, WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 별도 구현이 필요하다. Java 21에서 전체 Gradle 빌드와 기반·DB 테스트 42개를 통과했다. 이 검증은 아직 없는 계약 생성이나 실제 모델 연동을 포함하지 않는다.
+의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 일반 로그인·JWT는 별도 구현을 마쳤고 WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 후속 작업이다. Java 21에서 전체 Gradle 빌드와 기반·DB·회원 테스트 65개를 통과했다. 이 검증은 아직 없는 계약 생성이나 실제 모델 연동을 포함하지 않는다.
 
 ## 3. 제공할 기능
 
@@ -113,10 +113,10 @@ MagNavi_SpringServer/
 
 | 이관할 기능 | 기존 API | Spring 구현 방향 |
 |---|---|---|
-| 회원가입 | `POST /users/signup` | 동등 기능 구현 |
-| 로그인·JWT 발급 | `POST /users/login` | 동등 기능 구현 |
-| 내 정보 조회 | `GET /users/me` | 동등 기능 구현 |
-| 내 이름 변경 | `PUT /users/me/username` | 동등 기능 구현 |
+| 회원가입 | `POST /users/signup` | 3-1단계 구현, [회원 API 안내](docs/api/MEMBER_API.md) |
+| 로그인·JWT 발급 | `POST /users/login` | 3-1단계 구현, [회원 API 안내](docs/api/MEMBER_API.md) |
+| 내 정보 조회 | `GET /users/me` | 3-1단계 구현, [회원 API 안내](docs/api/MEMBER_API.md) |
+| 내 이름 변경 | `PUT /users/me/username` | 3-1단계 구현, [회원 API 안내](docs/api/MEMBER_API.md) |
 | 즐겨찾기 등록 | `POST /favorites/` | 동등 기능 구현 |
 | 내 즐겨찾기 목록 | `GET /favorites/` | 동등 기능 구현 |
 | 내 즐겨찾기 삭제 | `DELETE /favorites/{favorite_id}` | 동등 기능 구현 |

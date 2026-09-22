@@ -30,6 +30,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +51,10 @@ import com.example.magnavi_springserver.shared.observability.RequestTraceFilter;
 @ActiveProfiles("test")
 @ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTests {
+
+    /** 이 테스트는 MVC 오류만 다룬다. 실제 JWT 검증은 회원 통합 테스트에서 확인한다. */
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @Autowired
     private MockMvc mockMvc;

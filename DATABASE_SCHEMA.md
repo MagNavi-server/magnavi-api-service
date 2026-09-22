@@ -4,7 +4,7 @@
 
 [프로젝트 개요](PROJECT_OVERVIEW.md) · [구현 계획](IMPLEMENTATION_PLAN.md) · [모듈 안내](docs/modules/README.md)
 
-이 문서는 Spring 서버가 무엇을 저장하고, 테이블을 어떻게 연결하며, 어떤 규칙으로 데이터를 보호할지 설명한다. 기본 8개 테이블은 Flyway SQL과 JPA 엔티티·저장소로 구현했고 격리 MySQL에서 생성·검증했다. 기존 개발/운영 DB에 적용한 상태는 아니며, 선택 기능·업무 API·데이터 이관은 후속 계획으로 구분한다. 이 문서가 스키마 상세의 기준이고, 구현 순서와 기능 흐름은 연결된 문서에서 관리한다.
+이 문서는 Spring 서버가 무엇을 저장하고, 테이블을 어떻게 연결하며, 어떤 규칙으로 데이터를 보호할지 설명한다. 기본 8개 테이블은 Flyway SQL과 JPA 엔티티·저장소로 구현했고 격리 MySQL에서 생성·검증했다. 기존 개발/운영 DB에 적용한 상태는 아니며, 선택 기능·데이터 이관은 후속 계획으로 구분한다. 3-1단계의 일반 회원·JWT API는 기존 테이블을 사용하며 SQL 변경은 없다. 이 문서가 스키마 상세의 기준이고, 구현 순서와 기능 흐름은 연결된 문서에서 관리한다.
 
 ## 1. 이번 설계의 전제
 
@@ -24,7 +24,7 @@
 - 일반 로그인 ID는 `String.strip()`으로 앞뒤 공백을 제거하고 대소문자를 구분한다. `Alice`와 `alice`는 다른 ID이며 저장·조회 모두 같은 공백 정리를 사용한다.
 - 이메일·전화번호는 선택값이다. 이메일 중복을 허용하고 이메일만으로 회원을 합치지 않는다.
 - [V1 회원 SQL](src/main/resources/db/migration/V1__create_member_tables.sql), [V2 장소 SQL](src/main/resources/db/migration/V2__create_indoor_place_tables.sql), [V3 즐겨찾기 SQL](src/main/resources/db/migration/V3__create_favorites.sql)이 실제 테이블·인덱스·제약의 기준이다.
-- 각 모듈의 `domain`에 8개 JPA 엔티티, `infrastructure/persistence`에 8개 저장소를 구현했다. 모듈 간 참조는 다른 모듈의 엔티티 객체 대신 ID로 표현하고 DB FK로 보호한다. 기존 PersistenceAdapter와 업무 API·서비스는 다음 단계에서 연결한다.
+- 각 모듈의 `domain`에 8개 JPA 엔티티, `infrastructure/persistence`에 8개 저장소를 구현했다. 모듈 간 참조는 다른 모듈의 엔티티 객체 대신 ID로 표현하고 DB FK로 보호한다. 3-1단계에서 MemberPersistenceAdapter와 일반 회원 API·서비스를 연결했다. 다른 모듈의 업무 API·어댑터는 후속 구현이다.
 
 ## 2. 먼저 알아둘 용어
 

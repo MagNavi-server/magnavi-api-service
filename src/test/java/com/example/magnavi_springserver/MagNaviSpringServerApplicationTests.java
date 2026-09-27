@@ -86,7 +86,7 @@ class MagNaviSpringServerApplicationTests {
     /** 아직 허용하지 않은 업무 경로는 테스트 인증 주체에게도 열리지 않는다. */
     @Test
     void rejectsAuthenticatedRequestsUntilAnEndpointIsExplicitlyAllowed() throws Exception {
-        mockMvc.perform(get("/favorites").with(user("test-member")))
+        mockMvc.perform(get("/favorites/1").with(user("test-member")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }

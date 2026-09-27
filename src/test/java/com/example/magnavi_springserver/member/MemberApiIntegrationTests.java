@@ -279,7 +279,7 @@ class MemberApiIntegrationTests {
     @Test
     void keepsUnimplementedAndManagementRoutesClosed() throws Exception {
         String token = tokens.issueAccessToken(1L);
-        for (String route : List.of("/favorites", "/actuator/env", "/users/1", "/error")) {
+        for (String route : List.of("/favorites/1", "/actuator/env", "/users/1", "/error")) {
             mvc.perform(get(route).header("Authorization", "Bearer " + token))
                     .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
         }

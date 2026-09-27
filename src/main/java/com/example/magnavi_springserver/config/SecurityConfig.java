@@ -15,7 +15,7 @@ import com.example.magnavi_springserver.shared.error.SecurityErrorResponseWriter
 import com.example.magnavi_springserver.shared.security.AuthenticatedMember;
 
 /**
- * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보와 외부 검색에는 JWT를 요구한다.
+ * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보·외부 검색·즐겨찾기에는 JWT를 요구한다.
  */
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
@@ -58,6 +58,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/users/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/places/search", "/places/search/").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/users/me/username").authenticated()
+                        // 구현한 세 가지 동작만 연다. 소유권과 현재 회원 확인은 즐겨찾기 서비스가 담당한다.
+                        .requestMatchers(HttpMethod.GET, "/favorites", "/favorites/").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/favorites", "/favorites/").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/favorites/{favoriteId}", "/favorites/{favoriteId}/").authenticated()
                         .anyRequest().denyAll())
                 .build();
     }

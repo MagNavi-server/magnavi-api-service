@@ -10,7 +10,7 @@
 
 이번 설계에는 기존 일반 로그인 유지안, 카카오·구글 로그인, 네이버 지역 검색을 반영했다. 외부 검색 결과의 저장과 자체 실외 장소 관리는 조건부 항목이다.
 
-현재는 실행·테스트 기반, 8개 업무 테이블, 일반 회원·JWT, 건물·층·실내 장소 조회와 모델 코드 매핑 내부 조회를 구현했다. 4-3단계 네이버 검색도 구현했으며 실제 키·좌표 단위·앱 연동은 후속 확인 사항이다. 소셜 로그인·즐겨찾기·실시간 API는 후속 구현 목표다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
+현재는 실행·테스트 기반, 8개 업무 테이블, 일반 회원·JWT, 건물·층·실내 장소 조회와 모델 코드 매핑 내부 조회를 구현했다. 4-3단계 네이버 검색과 5-1단계 실내 장소 즐겨찾기 등록·목록·삭제도 구현했다. 실제 네이버 키·좌표 단위·앱 전환, 소셜 로그인·버스/정류장 및 외부 장소 즐겨찾기·실시간 API는 후속 작업이다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
 
 ## 1. 이 서버는 어떤 역할인가?
 
@@ -46,7 +46,7 @@ MagNavi_SpringServer/
 │   ├── MagNaviSpringServerApplication.java
 │   ├── member/            # 일반 회원 API·JWT·엔티티·저장소, 소셜 인증은 빈 골격
 │   ├── place/             # 실내 조회 API·모델 매핑 내부 조회·엔티티·저장소
-│   ├── favorite/          # 유형별 즐겨찾기 엔티티·소유 회원 조회 저장소
+│   ├── favorite/          # 실내 즐겨찾기 등록·목록·삭제 API, 엔티티·저장소
 │   ├── positioning/       # 4개 계층의 빈 클래스
 │   ├── shared/            # 오류·요청 추적·공통 ID/UTC 시각·값 검사
 │   └── config/            # 접근 정책·JWT 설정 구현, WebSocket·gRPC는 빈 골격
@@ -78,11 +78,11 @@ MagNavi_SpringServer/
     └── SHARED.md          # 최소 공통 지원 영역
 ```
 
-초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 4-1단계에서 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository와 조회 DTO를 연결했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter를 추가해 모델 키·버전·코드를 활성 장소로 연결하는 내부 조회를 구현했다. 4-3단계에서 PlaceSearchController·PlaceSearchService·NaverLocalSearchClient와 검색 설정·한도·오류 처리를 구현했다. 소셜 인증·즐겨찾기·실시간 클래스와 WebSocket·gRPC 설정은 빈 골격이다.
+초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 4-1단계에서 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository와 조회 DTO를 연결했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter를 추가해 모델 키·버전·코드를 활성 장소로 연결하는 내부 조회를 구현했다. 4-3단계에서 PlaceSearchController·PlaceSearchService·NaverLocalSearchClient와 검색 설정·한도·오류 처리를 구현했다. 5-1단계에서 실내 즐겨찾기 등록·목록·삭제와 장소 묶음 조회를 연결했다. 소셜 인증·실시간 클래스와 WebSocket·gRPC 설정은 빈 골격이며 교통·외부 장소 즐겨찾기는 후속 단계다.
 
 공통·local·test·prod 설정과 개발용 MySQL Compose, Testcontainers 테스트를 추가했다. 기본 테스트는 MySQL 연결·상태 확인·접근 정책을 검증하도록 바꿨고 오류 변환·동시 요청 추적 테스트를 추가했다. JPA는 `validate`, 스키마 변경은 Flyway 기준이다. V1~V3 SQL과 엔티티를 실제 MySQL 8.4.8에서 검증했다. 새 DB 구조부터 구현하며 기존 FastAPI 데이터 이관은 후속 작업으로 분리했다.
 
-생존·준비 상태 GET 두 개, 일반 가입·로그인 POST, 건물·층·활성 장소 조회 GET 7개를 공개한다. 내 정보 GET·이름 변경 PUT는 JWT로 보호하고 나머지 경로는 기본 거절한다. 임시 로그인 사용자·세션 인증은 사용하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. 운영 배포용 이미지·Compose·CI/CD는 구현 전이다.
+생존·준비 상태 GET 두 개, 일반 가입·로그인 POST, 건물·층·활성 장소 조회 GET 7개를 공개한다. 내 정보 GET·이름 변경 PUT·외부 검색 GET·실내 즐겨찾기 POST/GET/DELETE는 JWT로 보호하고 나머지 경로는 기본 거절한다. 임시 로그인 사용자·세션 인증은 사용하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. 운영 배포용 이미지·Compose·CI/CD는 구현 전이다.
 
 ### 2.1 선언된 기술과 의존성
 

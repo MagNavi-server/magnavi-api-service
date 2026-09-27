@@ -63,6 +63,18 @@ public class PlaceQueryService {
         return persistence.findLocation(locationId);
     }
 
+    /** 다른 모듈의 목록 조합용 공개 기능이다. 최대 100개를 함께 읽고 비활성·없는 장소는 제외한다. */
+    public List<IndoorLocationInfo> getLocationsByIds(List<Long> locationIds) {
+        if (locationIds == null || locationIds.size() > MAX_LIMIT) {
+            throw new PlaceException(PlaceException.Reason.INVALID_INPUT, "locationIds");
+        }
+        locationIds.forEach(id -> validateId(id, "locationIds"));
+        if (locationIds.isEmpty()) {
+            return List.of();
+        }
+        return persistence.findLocationsByIds(locationIds.stream().distinct().toList());
+    }
+
     /** 한 번에 너무 많이 읽거나 지나치게 큰 OFFSET 조회를 실행하지 않게 제한한다. */
     private void validateRange(int skip, int limit) {
         if (skip < 0 || skip > MAX_SKIP) {

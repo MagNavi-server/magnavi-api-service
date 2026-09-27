@@ -170,7 +170,8 @@ PATCH의 필드 누락은 기존 값 유지, 명시적 null은 제거 등으로 
 
 | 공개 기능 예시 | 호출하는 쪽 | 반환할 내용 |
 |---|---|---|
-| `PlaceQueryService.getLocation(locationId)` | favorite 등에서 향후 사용 가능 | 활성 장소와 건물·층을 담은 IndoorLocationInfo |
+| `PlaceQueryService.getLocation(locationId)` | favorite 등록에서 사용 | 활성 장소와 건물·층을 담은 IndoorLocationInfo |
+| `PlaceQueryService.getLocationsByIds(locationIds)` | favorite 목록에서 사용 | 최대 100개 ID의 활성 장소·층·건물 묶음 조회. 없는/비활성 장소는 제외 |
 | `ModelLocationQueryService.findLocation(modelKey, modelVersion, locationCode)` | positioning에서 향후 사용 가능 | 활성 장소와 건물·층을 담은 IndoorLocationInfo |
 
 PlaceQueryService의 ID 기반 조회와 ModelLocationQueryService의 모델 코드 조회를 구현했다. positioning과의 실제 호출 연결은 후속 단계다. 다른 모듈에는 읽기 결과 DTO를 반환하고, 내부 JPA 엔티티나 수정용 Repository를 넘기지 않는다.

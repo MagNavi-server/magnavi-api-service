@@ -62,4 +62,9 @@ public class PlacePersistenceAdapter {
         return queries.findLocation(locationId)
                 .orElseThrow(() -> new PlaceException(PlaceException.Reason.NOT_FOUND));
     }
+
+    /** 목록의 장소·층·건물 정보를 한 번에 읽어 항목마다 SQL이 추가되지 않게 한다. */
+    public List<IndoorLocationInfo> findLocationsByIds(List<Long> locationIds) {
+        return queries.findLocationsByIds(locationIds);
+    }
 }

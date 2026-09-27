@@ -90,4 +90,10 @@ public class PlaceReadRepository {
         return entityManager.createQuery(LOCATION_SELECT + " and location.id = :locationId", IndoorLocationInfo.class)
                 .setParameter("locationId", locationId).getResultList().stream().findFirst();
     }
+
+    /** ID 목록을 매개변수로 전달하며 기존 공개 조회와 같은 활성 장소 조건을 유지한다. */
+    public List<IndoorLocationInfo> findLocationsByIds(List<Long> locationIds) {
+        return entityManager.createQuery(LOCATION_SELECT + " and location.id in :locationIds", IndoorLocationInfo.class)
+                .setParameter("locationIds", locationIds).getResultList();
+    }
 }

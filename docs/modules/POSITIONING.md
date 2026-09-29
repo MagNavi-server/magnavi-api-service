@@ -1,8 +1,10 @@
 # positioning — 실시간 위치 연결 모듈
 
-작성일: 2026-09-10 · 상태: 구현 예정 설계
+작성일: 2026-09-10 · 6단계 구현일: 2026-09-29 · 상태: Spring gRPC 구현·검증, 앱 WebSocket·실제 Python 연동 예정
 
 [전체 모듈 안내](README.md) · [장소 모듈](PLACE.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
+
+현재 `PositioningSessionService`·`PositioningConnection`·`ModelStreamClient`·`GrpcModelStreamClient`와 설정을 구현했다. `.proto`에서 Java 메시지·stub을 생성하고 루프백 합성 서버로 양방향 통신·한도·취소·장소 매핑을 검증했다. `PositioningWebSocketHandler`·`PositioningSession`·`InMemorySessionRegistry`는 7단계의 앱 연결을 위한 빈 골격이다. 아래 설계에는 후속 목표도 포함한다. 현재 규격·설정·테스트 범위는 [모델 gRPC 안내](../api/MODEL_GRPC.md)가 기준이다.
 
 ## 1. 무엇을 하는 모듈인가?
 
@@ -199,7 +201,7 @@ MVC를 모두 WebFlux로 바꾸거나 모든 메서드에 `@Async`를 붙일 필
 
 ## 11. 내부 구성과 다른 모듈의 관계
 
-명칭은 구현 방향을 설명하기 위한 예시다.
+6단계에서는 application의 모델 호출 경계·연결 핸들과 infrastructure의 gRPC 구현을 연결했다. 아래 표의 WebSocket·앱 세션 상태·레지스트리는 후속 설계다.
 
 | 계층 | 예시 구성요소 | 역할 |
 |---|---|---|

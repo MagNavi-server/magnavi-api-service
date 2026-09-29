@@ -175,7 +175,7 @@ config/             # 루트의 조립 지점; shared 내부가 아님
 └── ...             # 보안·WebSocket·외부 설정 연결
 ```
 
-현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. 2단계에서 persistence·validation의 최소 공통 지원을 추가했다. 3-1단계에서 AuthenticatedMember와 MemberTokenValidator를 구현했다. JWT 키·도구 조립은 config/JwtConfig가 맡는다. WebSocket·gRPC 설정은 빈 골격이며 추가 공통 도구는 실제 필요에 따라 구현한다.
+현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. 2단계에서 persistence·validation의 최소 공통 지원을 추가했다. 3-1단계에서 AuthenticatedMember와 MemberTokenValidator를 구현했다. JWT 키·도구 조립은 config/JwtConfig가 맡는다. gRPC 설정은 6단계에서 구현했고 WebSocket 설정은 빈 골격이다. 추가 공통 도구는 실제 필요에 따라 구현한다.
 
 회원·장소 엔티티를 같은 베이스 엔티티에 억지로 맞추는 것도 필수 사항이 아니다. 생성·수정 시각처럼 정말 같은 의미의 공통 항목인지부터 판단한다.
 

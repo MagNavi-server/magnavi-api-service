@@ -29,6 +29,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.flywaydb:flyway-mysql'
+    // 생성된 메시지와 gRPC 호출 코드가 사용하는 런타임이다. 버전은 기존 Boot BOM을 따른다.
+    implementation 'io.grpc:grpc-protobuf'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.mysql:mysql-connector-j'
     annotationProcessor 'org.projectlombok:lombok'
@@ -49,4 +51,17 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// 생성기와 실행 라이브러리를 같은 BOM 버전으로 맞춘다. 생성물은 build/ 아래에만 둔다.
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:${dependencyManagement.importedProperties['protobuf-java.version']}" }
+    plugins {
+        grpc { artifact = "io.grpc:protoc-gen-grpc-java:${dependencyManagement.importedProperties['grpc-java.version']}" }
+    }
+    generateProtoTasks {
+        all().configureEach { task ->
+            task.plugins { grpc {} }
+        }
+    }
 }

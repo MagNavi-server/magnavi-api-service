@@ -12,6 +12,8 @@
 
 현재는 실행·테스트 기반, 8개 업무 테이블, 일반 회원·JWT, 건물·층·실내 장소 조회와 모델 코드 매핑 내부 조회를 구현했다. 4-3단계 네이버 검색과 5-1단계 실내 장소 즐겨찾기 등록·목록·삭제도 구현했다. 실제 네이버 키·좌표 단위·앱 전환, 소셜 로그인·버스/정류장 및 외부 장소 즐겨찾기·실시간 API는 후속 작업이다. 개발 실행 방법과 현재 검증 범위는 [README](README.md)를 참고한다.
 
+6단계(2026-09-29): Spring gRPC 계약·생성 코드·스트림 호출·한도·취소·장소 매핑을 구현하고 합성 모델 서버로 검증했다. 실제 앱 센서 규격·Python 모델·WebSocket은 후속이다. [구현·설정 안내](docs/api/MODEL_GRPC.md)를 참고한다. 5단계 남은 기능은 보류했다.
+
 ## 1. 이 서버는 어떤 역할인가?
 
 MagNavi는 센서값으로 사용자의 실내 위치를 예측하는 서비스다. Spring 서버는 앱이 이용하는 백엔드의 입구로서 회원·인증·장소·즐겨찾기와 업무 DB를 관리한다.
@@ -47,9 +49,9 @@ MagNavi_SpringServer/
 │   ├── member/            # 일반 회원 API·JWT·엔티티·저장소, 소셜 인증은 빈 골격
 │   ├── place/             # 실내 조회 API·모델 매핑 내부 조회·엔티티·저장소
 │   ├── favorite/          # 실내 즐겨찾기 등록·목록·삭제 API, 엔티티·저장소
-│   ├── positioning/       # 4개 계층의 빈 클래스
+│   ├── positioning/       # gRPC 클라이언트·한도·취소·장소 매핑, WebSocket은 빈 골격
 │   ├── shared/            # 오류·요청 추적·공통 ID/UTC 시각·값 검사
-│   └── config/            # 접근 정책·JWT 설정 구현, WebSocket·gRPC는 빈 골격
+│   └── config/            # 접근 정책·JWT·gRPC 설정 구현, WebSocket은 빈 골격
 ├── src/main/resources/
 │   ├── application.yaml
 │   ├── application-local.yaml
@@ -78,7 +80,7 @@ MagNavi_SpringServer/
     └── SHARED.md          # 최소 공통 지원 영역
 ```
 
-초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 4-1단계에서 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository와 조회 DTO를 연결했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter를 추가해 모델 키·버전·코드를 활성 장소로 연결하는 내부 조회를 구현했다. 4-3단계에서 PlaceSearchController·PlaceSearchService·NaverLocalSearchClient와 검색 설정·한도·오류 처리를 구현했다. 5-1단계에서 실내 즐겨찾기 등록·목록·삭제와 장소 묶음 조회를 연결했다. 소셜 인증·실시간 클래스와 WebSocket·gRPC 설정은 빈 골격이며 교통·외부 장소 즐겨찾기는 후속 단계다.
+초기에는 역할별 빈 클래스 39개를 준비했고, 1단계에서 `SecurityConfig`, `ErrorResponse`, `TraceIdGenerator`를 구현하고 오류 변환·요청 추적 클래스를 추가했다. 2단계에서는 회원·장소·즐겨찾기 도메인 8개를 JPA 엔티티로 구현하고 각 모듈의 `infrastructure/persistence`에 저장소 8개를 추가했다. 3-1단계에서는 일반 회원 서비스·API·MemberPersistenceAdapter·비밀번호 해싱·JWT 발급/검증·`AuthenticatedMember`를 구현했다. 4-1단계에서 PlaceController·PlaceQueryService·PlacePersistenceAdapter·PlaceReadRepository와 조회 DTO를 연결했다. 4-2단계에서 ModelLocationQueryService·ModelLocationPersistenceAdapter를 추가해 모델 키·버전·코드를 활성 장소로 연결하는 내부 조회를 구현했다. 4-3단계에서 PlaceSearchController·PlaceSearchService·NaverLocalSearchClient와 검색 설정·한도·오류 처리를 구현했다. 5-1단계에서 실내 즐겨찾기 등록·목록·삭제와 장소 묶음 조회를 연결했다. gRPC 설정·클라이언트·장소 매핑 연결은 6단계에서 구현했다. 소셜 인증·앱 WebSocket·실제 모델 연동과 교통·외부 장소 즐겨찾기는 후속 단계다.
 
 공통·local·test·prod 설정과 개발용 MySQL Compose, Testcontainers 테스트를 추가했다. 기본 테스트는 MySQL 연결·상태 확인·접근 정책을 검증하도록 바꿨고 오류 변환·동시 요청 추적 테스트를 추가했다. JPA는 `validate`, 스키마 변경은 Flyway 기준이다. V1~V3 SQL과 엔티티를 실제 MySQL 8.4.8에서 검증했다. 새 DB 구조부터 구현하며 기존 FastAPI 데이터 이관은 후속 작업으로 분리했다.
 
@@ -105,7 +107,7 @@ MagNavi_SpringServer/
 
 소셜 로그인 방식에 따라 OAuth2 Client 등 추가 의존성을 검토한다. 현재 Resource Server 의존성만으로 카카오·구글 가입·계정 연결이 완성되지는 않는다.
 
-의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 일반 로그인·JWT는 별도 구현을 마쳤고 WebSocket 연결, 비동기 gRPC stub과 protobuf 생성 설정은 후속 작업이다. Java 21에서 전체 Gradle 빌드와 기반·DB·회원·장소·모델 매핑 검증에 외부 검색의 로컬 모의 HTTP·인증·한도 테스트를 추가했다. 최신 실행 결과는 README를 참고한다. 이 검증은 아직 없는 계약 생성이나 실제 모델 연동을 포함하지 않는다.
+의존성을 추가했다고 해당 기능이 완성된 것은 아니다. 일반 로그인·JWT는 별도 구현을 마쳤고 gRPC stub·protobuf 생성·합성 모델 통신 검증은 6단계에서 구현했다. WebSocket·실제 Python 연동은 후속 작업이다. Java 21에서 전체 Gradle 빌드와 기반·DB·회원·장소·모델 매핑 검증에 외부 검색의 로컬 모의 HTTP·인증·한도 테스트를 추가했다. 최신 실행 결과는 README를 참고한다. 6단계 검증에는 계약 생성과 합성 gRPC 서버 통신을 포함하며 실제 Python 모델 연동은 포함하지 않는다.
 
 ## 3. 제공할 기능
 

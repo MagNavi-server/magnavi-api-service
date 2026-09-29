@@ -6,6 +6,8 @@
 
 초기에는 아래 계층을 위한 빈 클래스 39개를 준비했다. 이후 공통 오류·요청 추적·기본 보안과 실행·테스트 설정을 구현했으며, 2단계에서는 8개 업무 엔티티·JPA 저장소와 Flyway SQL 3개를 구현했다. 3-1단계에서 일반 회원·JWT, 4-1단계에서 건물·층·활성 장소 조회, 4-2단계에서 모델 코드 매핑 내부 조회를 구현했다. 4-3단계 네이버 검색·호출 제한·외부 장애 처리를 구현했다. 5-1단계 실내 즐겨찾기 등록·목록·삭제와 장소 묶음 조회도 구현했다. 실제 네이버 키·좌표/앱 연동 확인, 소셜 인증·교통/외부 즐겨찾기·실시간 연동은 후속 작업이다. 전체 작업 순서는 [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md), 현재 실행 방법은 [README](../../README.md), 테이블·컬럼·저장 정책은 [DB 스키마 설계](../../DATABASE_SCHEMA.md)를 참고한다.
 
+6단계에서는 positioning의 gRPC 계약·클라이언트·한도·취소·장소 매핑을 구현했다. 합성 gRPC 서버·격리 MySQL을 포함한 전체 218개 테스트가 통과했으며 실제 앱·Python 모델은 후속이다. 5단계 마무리는 보류했다. [모델 통신 안내](../api/MODEL_GRPC.md)를 참고한다.
+
 ## 1. 모듈러 모놀리스는 무엇인가?
 
 모듈러 모놀리스는 **하나의 서버 프로그램 안에서 기능을 책임별로 나눈 구조**다.
@@ -142,8 +144,8 @@ DB에 외래 키가 있다고 다른 모듈의 Repository를 직접 호출해도
 | shared | 3 | ErrorResponse, AuthenticatedMember, TraceIdGenerator |
 | config | 3 | SecurityConfig, WebSocketConfig, GrpcClientConfig |
 
-위 표는 초기 골격의 수다. 이후 member·place·favorite의 도메인 8개를 JPA 엔티티로 구현하고 각 모듈 infrastructure/persistence에 저장소 8개를 추가했다. 일반 회원 서비스·API·MemberPersistenceAdapter는 3-1단계에서 구현했다. 4-1단계에서 장소 조회 API·서비스·어댑터와 JPQL 조회 저장소도 구현했다. 외부 검색·즐겨찾기·positioning은 빈 골격으로 남아 있다. 선택 사항인 자체 실외 장소·시설 클래스는 미리 만들지 않았다.
+위 표는 초기 골격의 수다. 이후 member·place·favorite의 도메인 8개를 JPA 엔티티로 구현하고 각 모듈 infrastructure/persistence에 저장소 8개를 추가했다. 일반 회원 서비스·API·MemberPersistenceAdapter는 3-1단계에서 구현했다. 4-1단계에서 장소 조회 API·서비스·어댑터와 JPQL 조회 저장소도 구현했다. 외부 검색·실내 즐겨찾기 API와 positioning의 gRPC 호출도 구현했다. positioning의 WebSocket·앱 세션 레지스트리는 후속 골격이다. 선택 사항인 자체 실외 장소·시설 클래스는 미리 만들지 않았다.
 
-1단계에서는 `ErrorResponse`, `TraceIdGenerator`, `SecurityConfig`를 구현하고 MVC·보안·서블릿 오류 처리와 요청 추적 필터를 추가했다. `AuthenticatedMember`와 JWT 발급·검증 설정은 3-1단계에서 구현했다. `WebSocketConfig`, `GrpcClientConfig`는 빈 골격이다. 자세한 현재 공통 동작은 [shared](SHARED.md)를 참고한다.
+1단계에서는 `ErrorResponse`, `TraceIdGenerator`, `SecurityConfig`를 구현하고 MVC·보안·서블릿 오류 처리와 요청 추적 필터를 추가했다. `AuthenticatedMember`와 JWT 발급·검증 설정은 3-1단계에서 구현했다. `GrpcClientConfig`는 6단계에서 구현했으며 `WebSocketConfig`는 빈 골격이다. 자세한 현재 공통 동작은 [shared](SHARED.md)를 참고한다.
 
 전체 테스트 97개는 기존 기반·DB·회원·실내 조회 검증에 모델 키·버전·코드 구분, 연결 누락·비활성·입력 오류와 매핑 조회 SQL 횟수 검증을 더한다. 소셜 인증·실제 앱·모델 연동은 포함하지 않는다.

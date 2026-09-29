@@ -26,6 +26,20 @@ spring:
       mode: never
 
 magnavi:
+  model-grpc:
+    # 실제 Python·앱 규격 확인 전에는 비활성으로 유지한다. 다른 업무 API는 계속 동작한다.
+    enabled: ${MODEL_GRPC_ENABLED:false}
+    host: ${MODEL_GRPC_HOST:}
+    port: ${MODEL_GRPC_PORT:50051}
+    plaintext: ${MODEL_GRPC_PLAINTEXT:false}
+    sensor-profile-id: ${MODEL_SENSOR_PROFILE_ID:}
+    max-streams: 32
+    max-pending-samples: 32
+    max-buffered-events: 32
+    max-message-bytes: 65536
+    start-timeout: 3s
+    response-timeout: 5s
+    idle-timeout: 30s
   naver-search:
     # 키와 실제 응답의 좌표 단위를 확인한 뒤 활성화한다. 준비 전에는 검색만 503을 반환한다.
     enabled: ${NAVER_SEARCH_ENABLED:false}

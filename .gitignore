@@ -40,3 +40,5 @@ out/
 .env
 .env.*
 !.env.example
+# 실제 배포 비밀값은 제외하고, 값 없는 작성 예시만 공유합니다.
+!.env.prod.example

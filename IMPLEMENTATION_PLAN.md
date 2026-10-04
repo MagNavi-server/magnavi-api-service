@@ -37,7 +37,7 @@ Python의 모델 로딩·버퍼·전처리 내부 구현은 이 문서의 범위
 | 회원·장소·즐겨찾기 모듈 | JPA 기반·일반 회원·JWT·실내 조회·모델 매핑·외부 검색·실내 즐겨찾기 API 구현 | 소셜 로그인·교통/외부 즐겨찾기, 실제 네이버·앱 전환 확인 |
 | `positioning` 모듈 | gRPC 호출·순서/대기열/시간 제한·취소·장소 매핑 구현 | WebSocket·사용자별 세션·실제 Python 연동 |
 | 기반·DB·회원·장소 테스트 | 기존 97개에 검색·외부 장애·한도 검증 추가 | 소셜·실제 모델 매핑·실제 네이버·계약·연동 검증 추가 |
-| Docker·CI·배포 설정 | 개발용 MySQL Compose 구현 | Spring 이미지·운영 Compose·백업·release 개별 배포·복구, 상세는 12장 |
+| Docker·CI·배포 설정 | 개발용 MySQL Compose와 Spring·신규 MySQL 배포 파일 구현 | EC2 기동·HTTPS·백업·release 개별 배포·복구, 상세는 12장과 [배포 안내](docs/DEPLOYMENT.md) |
 
 ### 1.1 환경과 의존성 정리
 
@@ -556,7 +556,7 @@ Spring은 모듈러 모놀리스이므로 member·place·favorite·positioning�
 
 이 저장소의 `Dockerfile`은 검증된 Java 실행 환경과 애플리케이션 산출물로 Spring 이미지를 구성한다. `.dockerignore`로 Git·IDE·로컬 비밀 설정·불필요한 파일을 빌드 입력에서 제외한다. 런타임 이미지에는 실행에 필요한 파일만 포함한다.
 
-전체 Compose 설정은 한 관리 위치를 원본으로 삼고 개발·운영 설정을 구분한다. 어느 저장소에 둘지와 실제 파일명은 EC2 배치를 결정한 뒤 확정한다. 이번 계획으로 새 인프라 레포를 만들거나 양쪽 서버에 동일한 운영 설정을 복사하지 않는다.
+Spring EC2의 Compose 원본은 이 저장소의 `compose.prod.yaml`로 관리하고 개발용 `compose.local.yaml`과 구분한다. Python은 별도 EC2에 배치하며 해당 서버의 이미지·Compose는 후속 작업이다. 새 인프라 저장소를 만들거나 양쪽 서버에 같은 운영 설정을 복사하지 않는다.
 
 운영 DB의 주소·계정·비밀번호, JWT 키, 소셜·네이버 인증 정보는 Git과 이미지에 넣지 않는다. 실행 시 외부에서 주입하며 문서·예제 파일에는 변수명과 설명만 남긴다. 개발 데이터와 운영 데이터의 볼륨·설정도 분리한다.
 
@@ -591,7 +591,7 @@ Docker는 MySQL을 실행하고, Flyway는 그 안의 테이블 구조를 버전
 
 ### 12.5 EC2 배치·네트워크·준비 상태
 
-EC2 배치는 아직 확정하지 않았다. 한 EC2에 세 컨테이너를 함께 실행할지, Python 모델 서버를 별도 EC2에 둘지는 부하·비용·장애 영향을 비교해 결정한다. 컨테이너 수가 곧 EC2 대수는 아니다.
+초기 배치는 Spring·신규 MySQL을 같은 EC2에, Python 모델 서버를 별도 EC2에 두는 구성으로 정했다. `compose.prod.yaml`은 Spring EC2의 두 컨테이너만 관리한다. 실제 EC2에서의 부하·비용·장애 영향은 배포 후 검증해야 한다.
 
 같은 Docker 네트워크에서는 서비스 이름으로 MySQL·Python에 연결한다. Spring 컨테이너의 `localhost`는 Spring 컨테이너 자신이며 다른 컨테이너의 주소가 아니다. 서로 다른 EC2는 각 호스트의 Compose 구성과 사설 주소·보안 그룹을 별도로 설정한다. Compose 하나가 호스트 간 네트워크를 자동 구성하지는 않는다. 참고: [Compose 네트워크](https://docs.docker.com/compose/how-tos/networking/).
 
@@ -623,7 +623,7 @@ Compose는 특정 서비스만 교체할 수 있다. 참고: [Compose 운영 배
 
 두 저장소가 같은 EC2나 Compose 설정을 공유하면 서로의 배포가 다른 서비스의 이미지 버전을 덮어쓰지 않게 조정한다. 대상 서비스만 고정된 이미지 버전으로 교체하고, 계약 변경 시에는 양쪽 호환성·배포 순서를 별도로 확인한다.
 
-위 내용은 합의한 운영 Docker 활용 방향과 후속 구현 계획이다. 현재 구현한 `compose.local.yaml`은 개발용 MySQL만 다룬다. 운영 `Dockerfile`·Compose·GitHub Actions, EC2 변경과 실제 배포는 아직 수행하지 않았다.
+위 내용 중 Java 21 `Dockerfile`, `.dockerignore`, Spring·신규 MySQL용 `compose.prod.yaml`과 `.env.prod.example`을 구현했다. 내부 DB 통신·루프백 HTTP·데이터 볼륨·상태 확인·메모리·로그 한도를 포함한다. 명령별 이유와 실행한 검증은 [배포 안내](docs/DEPLOYMENT.md)에 정리한다. 실제 EC2 기동·HTTPS·백업/복원·부하 검증·GitHub Actions는 후속 작업이다.
 
 ## 13. 구현 전에 확정할 항목
 
@@ -642,8 +642,8 @@ Compose는 특정 서비스만 교체할 수 있다. 참고: [Compose 운영 배
 | 앱 WebSocket 계약 | 인증 전달 방법·메시지 형식·만료·재접속 |
 | gRPC 계약 | 6단계: Spring 원본·v1·생성·오류·순번·상대 시간 규칙 구현. 실제 센서 프로필·Python 계약 소비 방식 후속 |
 | 성능·한도 | 동시 사용자·주파수·큐 크기·허용 지연·연결 수 |
-| EC2 배치 | 한 대에 모두 배치 또는 모델 서버 별도 배치, 부하·비용·장애 영향 |
-| Compose 관리 위치 | 단일 원본 저장소·개발/운영 파일·두 서버 배포 조정 방식 |
+| EC2 배치 | 확정: Spring·신규 MySQL은 같은 EC2, Python은 별도 EC2. 실제 부하·장애 영향 검증은 후속 |
+| Compose 관리 위치 | Spring EC2는 이 저장소의 compose.prod.yaml. Python EC2 구성·두 서버 배포 조정은 후속 |
 | 이미지 저장소·실행 환경 | 저장소 종류·권한·태그/digest·대상 CPU 아키텍처 |
 | MySQL 운영 | 검증할 엔진 버전·볼륨 식별자·보관 디스크·리소스 한도 |
 | DB 백업·복구 | 별도 저장소·주기·보관 기간·허용 데이터 손실/복구 시간·복원 검증 |

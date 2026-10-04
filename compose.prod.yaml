@@ -1,0 +1,112 @@
+# Spring EC2 한 대에서 Spring과 새 MySQL을 각각 실행하는 설정입니다.
+# Python은 별도 EC2에 배치할 예정이며, 이 파일에는 포함하지 않습니다.
+# 프로젝트 이름은 볼륨 이름의 앞부분이 됩니다. 배포 후 임의로 바꾸지 마세요.
+name: magnavi-api-prod
+
+services:
+  mysql:
+    # 기존 프로젝트에서 사용하는 MySQL 버전과 이미지 내용을 고정합니다.
+    image: mysql:8.4.8@sha256:2952e3be7807f06fc18de50b3ea1a632d5c70d63482ff7d7376fe3aa8999babf
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      # 새 빈 볼륨으로 처음 실행할 때만 DB와 앱 전용 계정을 만듭니다.
+      # 기존 볼륨의 비밀번호는 이 값을 바꾸는 것만으로 변경되지 않습니다.
+      MYSQL_DATABASE: magnavi
+      MYSQL_USER: magnavi
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD를 설정하세요}
+      TZ: UTC
+    command:
+      # 2GiB EC2의 초기 설정입니다. 실제 부하 측정 후 조정해야 합니다.
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=30
+      # 상세 성능 계측의 메모리를 줄입니다. 필요해지면 메모리 여유와 함께 다시 켭니다.
+      - --performance-schema=OFF
+    # 컨테이너를 교체해도 DB 파일은 이 볼륨에 남습니다. 별도 백업은 여전히 필요합니다.
+    volumes:
+      - mysql-data:/var/lib/mysql
+    # ports를 선언하지 않아 호스트/인터넷에 MySQL 포트를 게시하지 않습니다.
+    # 같은 Compose 네트워크의 Spring이 mysql:3306으로 연결합니다.
+    networks:
+      - backend
+    mem_limit: 640m
+    memswap_limit: 640m
+    stop_grace_period: 1m
+    healthcheck:
+      # 프로세스 존재뿐 아니라 앱 계정으로 실제 쿼리가 되는지 확인합니다.
+      # $$는 Compose가 아닌 컨테이너 안의 셸에서 환경변수를 읽으라는 뜻입니다.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=\"$${MYSQL_USER}\" --database=\"$${MYSQL_DATABASE}\" --execute='SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    logging:
+      # 로그 파일 하나는 10MB, 최대 3개까지 보관해 디스크가 계속 차지 않게 합니다.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  spring:
+    # EC2에서 빌드하지 않습니다. 미리 빌드·검증한 이미지 태그 또는 digest를 지정합니다.
+    image: ${SPRING_IMAGE:?SPRING_IMAGE를 설정하세요}
+    platform: linux/amd64
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mysql:
+        # MySQL이 실제 쿼리를 받을 준비가 된 뒤 Spring을 시작합니다.
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      # 컨테이너 안의 localhost는 자기 자신입니다. DB에는 서비스 이름 mysql로 연결합니다.
+      # REQUIRED는 DB 통신을 TLS로 암호화합니다. 서버 인증서 신원 검증은 별도 구성입니다.
+      DB_URL: "jdbc:mysql://mysql:3306/magnavi?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true"
+      DB_USERNAME: magnavi
+      DB_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
+      JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?JWT_SECRET_BASE64를 설정하세요}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      # Java 힙은 객체 저장 공간입니다. 전체 컨테이너 메모리와 같지 않으므로 여유를 남깁니다.
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError"
+      TZ: UTC
+    ports:
+      # HTTPS 프록시 준비 전까지 EC2 내부에서만 확인합니다. 0.0.0.0으로 바꾸지 마세요.
+      # 검증 시 다른 로컬 포트를 지정할 수 있지만, 바인딩 주소는 항상 127.0.0.1입니다.
+      - "127.0.0.1:${SPRING_HTTP_PORT:-8080}:8080"
+    networks:
+      - backend
+    mem_limit: 768m
+    memswap_limit: 768m
+    stop_grace_period: 45s
+    # 이미지 파일은 읽기 전용으로 두고, Java/Tomcat의 임시 파일만 /tmp에 허용합니다.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # readiness는 Spring 기동뿐 아니라 DB 연결도 확인합니다.
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "5", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 15s
+      timeout: 6s
+      retries: 8
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  # 호스트 간 연결이 아닌, 이 EC2 안의 컨테이너 통신용 네트워크입니다.
+  backend:
+    driver: bridge
+
+volumes:
+  # 기본 이름은 magnavi-api-prod_mysql-data입니다. 컨테이너 삭제와 데이터 삭제는 별개입니다.
+  mysql-data:

@@ -44,7 +44,7 @@ MySQL은 `127.0.0.1:13306`, DB 이름은 `magnavi_local`, 앱 계정은 `magnavi
 docker compose -f compose.local.yaml stop
 ```
 
-기존 볼륨이 있으면 `.env`의 비밀번호를 바꾸는 것만으로 MySQL 계정 비밀번호가 변경되지는 않는다. 기존 데이터와 계정을 확인하고 조정한다. 이 Compose는 개발용 MySQL 설정이며 운영 배포 구성은 별도 단계다.
+기존 볼륨이 있으면 `.env`의 비밀번호를 바꾸는 것만으로 MySQL 계정 비밀번호가 변경되지는 않는다. 기존 데이터와 계정을 확인하고 조정한다. 이 Compose는 개발용 MySQL 설정이다. Spring·신규 MySQL을 같은 EC2에서 실행할 파일과 명령 설명은 [Docker 배포 준비 안내](docs/DEPLOYMENT.md)를 참고한다. 실제 EC2 배포·HTTPS·CI/CD는 후속 단계다.
 
 ## 3. Spring 실행
 
@@ -152,6 +152,7 @@ Testcontainers는 테스트용 MySQL을 임시 포트로 실행하고 종료 시
 
 ## 7. 관련 문서
 
+- [Spring·MySQL Docker 배포 준비](docs/DEPLOYMENT.md)
 - [일반 회원 API 요청·응답·오류](docs/api/MEMBER_API.md)
 - [건물·층·실내 장소 조회 API](docs/api/PLACE_API.md)
 - [모델 코드 → 장소 내부 조회](docs/api/MODEL_LOCATION_MAPPING.md)

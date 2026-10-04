@@ -42,8 +42,11 @@ MagNavi_SpringServer/
 ├── settings.gradle
 ├── gradlew / gradlew.bat
 ├── gradle/wrapper/
+├── Dockerfile / .dockerignore # Java 21 실행 이미지와 빌드 입력 제한
 ├── compose.local.yaml    # 개발용 MySQL, 로컬 포트·볼륨·쿼리 healthcheck
+├── compose.prod.yaml     # 같은 EC2의 Spring·신규 MySQL, 내부 통신·볼륨·자원 한도
 ├── .env.example          # 값 없는 개발 환경변수 예시
+├── .env.prod.example     # 값 없는 배포 환경변수 예시
 ├── src/main/java/com/example/magnavi_springserver/
 │   ├── MagNaviSpringServerApplication.java
 │   ├── member/            # 일반 회원 API·JWT·엔티티·저장소, 소셜 인증은 빈 골격
@@ -84,7 +87,7 @@ MagNavi_SpringServer/
 
 공통·local·test·prod 설정과 개발용 MySQL Compose, Testcontainers 테스트를 추가했다. 기본 테스트는 MySQL 연결·상태 확인·접근 정책을 검증하도록 바꿨고 오류 변환·동시 요청 추적 테스트를 추가했다. JPA는 `validate`, 스키마 변경은 Flyway 기준이다. V1~V3 SQL과 엔티티를 실제 MySQL 8.4.8에서 검증했다. 새 DB 구조부터 구현하며 기존 FastAPI 데이터 이관은 후속 작업으로 분리했다.
 
-생존·준비 상태 GET 두 개, 일반 가입·로그인 POST, 건물·층·활성 장소 조회 GET 7개를 공개한다. 내 정보 GET·이름 변경 PUT·외부 검색 GET·실내 즐겨찾기 POST/GET/DELETE는 JWT로 보호하고 나머지 경로는 기본 거절한다. 임시 로그인 사용자·세션 인증은 사용하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. 운영 배포용 이미지·Compose·CI/CD는 구현 전이다.
+생존·준비 상태 GET 두 개, 일반 가입·로그인 POST, 건물·층·활성 장소 조회 GET 7개를 공개한다. 내 정보 GET·이름 변경 PUT·외부 검색 GET·실내 즐겨찾기 POST/GET/DELETE는 JWT로 보호하고 나머지 경로는 기본 거절한다. 임시 로그인 사용자·세션 인증은 사용하지 않는다. 준비 상태는 DB 연결을 포함하며, 모델 서비스 연결은 아직 포함하지 않는다. Spring·신규 MySQL을 같은 EC2에서 실행할 Dockerfile·Compose·환경변수 예시를 준비했다. 명령의 의미와 검증 범위는 [배포 안내](docs/DEPLOYMENT.md)를 참고한다. 실제 EC2 배포·HTTPS·CI/CD는 후속 작업이다.
 
 ### 2.1 선언된 기술과 의존성
 

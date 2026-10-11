@@ -2,7 +2,8 @@
 spring:
   datasource:
     url: jdbc:mysql://127.0.0.1:${MAGNAVI_MYSQL_PORT:13306}/magnavi_local?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
-    username: magnavi
+    # Compose가 설정한 root 계정과 같은 MYSQL_PASSWORD 값을 사용한다.
+    username: root
     password: ${MYSQL_PASSWORD}
 
 server:

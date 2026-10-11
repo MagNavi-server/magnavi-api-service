@@ -10,12 +10,11 @@ services:
     platform: linux/amd64
     restart: unless-stopped
     environment:
-      # 새 빈 볼륨으로 처음 실행할 때만 DB와 앱 전용 계정을 만듭니다.
+      # 새 빈 볼륨으로 처음 실행할 때 DB를 만들고 root 비밀번호를 설정합니다.
       # 기존 볼륨의 비밀번호는 이 값을 바꾸는 것만으로 변경되지 않습니다.
       MYSQL_DATABASE: magnavi
-      MYSQL_USER: magnavi
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD를 설정하세요}
+      # .env.prod의 비밀번호 하나를 MySQL이 요구하는 환경변수 이름으로 전달합니다.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
       TZ: UTC
     command:
       # 2GiB EC2의 초기 설정입니다. 실제 부하 측정 후 조정해야 합니다.
@@ -34,9 +33,9 @@ services:
     memswap_limit: 640m
     stop_grace_period: 1m
     healthcheck:
-      # 프로세스 존재뿐 아니라 앱 계정으로 실제 쿼리가 되는지 확인합니다.
+      # Spring과 같은 root 계정으로 실제 쿼리가 되는지 확인합니다.
       # $$는 Compose가 아닌 컨테이너 안의 셸에서 환경변수를 읽으라는 뜻입니다.
-      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=\"$${MYSQL_USER}\" --database=\"$${MYSQL_DATABASE}\" --execute='SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=root --database=\"$${MYSQL_DATABASE}\" --execute='SELECT 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -64,7 +63,8 @@ services:
       # 컨테이너 안의 localhost는 자기 자신입니다. DB에는 서비스 이름 mysql로 연결합니다.
       # REQUIRED는 DB 통신을 TLS로 암호화합니다. 서버 인증서 신원 검증은 별도 구성입니다.
       DB_URL: "jdbc:mysql://mysql:3306/magnavi?sslMode=REQUIRED&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true"
-      DB_USERNAME: magnavi
+      # MySQL 초기화와 같은 비밀번호를 사용해 root 계정으로 연결합니다.
+      DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
       JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?JWT_SECRET_BASE64를 설정하세요}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
@@ -73,7 +73,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError"
       TZ: UTC
     ports:
-      # HTTPS 프록시 준비 전까지 EC2 내부에서만 확인합니다. 0.0.0.0으로 바꾸지 마세요.
+      # EC2 내부의 Nginx와 상태 검사에서 연결합니다. 외부 요청은 Nginx로 받습니다.
       # 검증 시 다른 로컬 포트를 지정할 수 있지만, 바인딩 주소는 항상 127.0.0.1입니다.
       - "127.0.0.1:${SPRING_HTTP_PORT:-8080}:8080"
     networks:

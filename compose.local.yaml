@@ -1,4 +1,4 @@
-# 개발 전용 MySQL이다. 운영 배포용 Compose 구성은 별도로 결정한다.
+# 개발 전용 MySQL이다. EC2 배포에는 compose.prod.yaml을 사용한다.
 name: magnavi-api-local
 
 services:
@@ -6,17 +6,18 @@ services:
     image: mysql:8.4.8
     environment:
       MYSQL_DATABASE: magnavi_local
-      MYSQL_USER: magnavi
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD를 설정하세요}
+      # .env의 비밀번호 하나를 MySQL이 요구하는 root 비밀번호 이름으로 전달한다.
+      # 이 값은 빈 볼륨의 첫 초기화에 적용되며 기존 DB 비밀번호를 바꾸지 않는다.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD를 설정하세요}
       TZ: UTC
     ports:
       - "127.0.0.1:${MAGNAVI_MYSQL_PORT:-13306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      # 프로세스 생존뿐 아니라 애플리케이션 계정의 실제 쿼리 성공을 확인한다.
-      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=\"$${MYSQL_USER}\" --database=\"$${MYSQL_DATABASE}\" --execute='SELECT 1' >/dev/null 2>&1"]
+      # Spring과 같은 root 계정으로 실제 쿼리 성공을 확인한다.
+      # $$는 컨테이너 안의 셸에서 비밀번호 환경변수를 읽게 한다.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=root --database=\"$${MYSQL_DATABASE}\" --execute='SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 3s
       retries: 20

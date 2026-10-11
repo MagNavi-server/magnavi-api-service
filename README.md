@@ -26,17 +26,18 @@ docker compose version
 프로젝트 루트에서 예시 파일을 복사한다.
 
 ```bash
-cp .env.example .env
+# 처음 실행할 때만 복사하며, 기존 비밀번호 파일은 덮어쓰지 않는다.
+cp -n .env.example .env
 ```
 
-`.env`의 `MYSQL_PASSWORD`와 `MYSQL_ROOT_PASSWORD`를 **서로 다른 로컬 전용 값**으로 채운다. 이 파일은 Git에서 제외한다. 뒤의 터미널 실행 예제처럼 읽으려면 셸에서도 유효한 `이름='값'` 형식으로 작성한다.
+`.env`의 `MYSQL_PASSWORD`에 원하는 로컬 DB root 비밀번호를 직접 입력한다. 현재는 root 계정 하나를 사용하며 Compose가 이 값을 MySQL의 `MYSQL_ROOT_PASSWORD`로 전달하므로, `.env`에 두 번째 비밀번호 항목을 만들지 않는다. 이 파일은 Git에서 제외한다. 뒤의 터미널 실행 예제처럼 읽으려면 셸에서도 유효한 `이름='값'` 형식으로 작성한다.
 
 ```bash
 docker compose -f compose.local.yaml up -d --wait
 docker compose -f compose.local.yaml ps
 ```
 
-MySQL은 `127.0.0.1:13306`, DB 이름은 `magnavi_local`, 앱 계정은 `magnavi`다. 포트가 사용 중이면 `.env`의 `MAGNAVI_MYSQL_PORT`를 바꾼다. healthcheck는 앱 계정으로 `SELECT 1`을 실행해 실제 쿼리 가능 여부를 확인한다.
+MySQL은 `127.0.0.1:13306`, DB 이름은 `magnavi_local`, Spring의 접속 계정은 `root`다. 포트가 사용 중이면 `.env`의 `MAGNAVI_MYSQL_PORT`를 바꾼다. healthcheck도 root 계정으로 `SELECT 1`을 실행해 실제 쿼리 가능 여부를 확인한다.
 
 데이터는 `magnavi-api-local_mysql-data` 이름의 Docker 볼륨에 유지된다. 작업 후에는 다음 명령으로 멈춘다.
 
@@ -44,7 +45,7 @@ MySQL은 `127.0.0.1:13306`, DB 이름은 `magnavi_local`, 앱 계정은 `magnavi
 docker compose -f compose.local.yaml stop
 ```
 
-기존 볼륨이 있으면 `.env`의 비밀번호를 바꾸는 것만으로 MySQL 계정 비밀번호가 변경되지는 않는다. 기존 데이터와 계정을 확인하고 조정한다. 이 Compose는 개발용 MySQL 설정이다. Spring·신규 MySQL을 같은 EC2에서 실행할 파일과 명령 설명은 [Docker 배포 준비 안내](docs/DEPLOYMENT.md)를 참고한다. 실제 EC2 배포·HTTPS·CI/CD는 후속 단계다.
+기존 볼륨이 있으면 `.env`의 비밀번호를 바꾸는 것만으로 MySQL 계정 비밀번호가 변경되지는 않는다. 이전 앱 전용 계정 구성에서 바꾸는 경우에도 기존 root 접속 권한·비밀번호를 확인하며, 볼륨을 삭제해 해결하지 않는다. 이 Compose는 개발용 MySQL 설정이다. Spring·신규 MySQL의 ECR·EC2 수동 기동과 Nginx 외부 readiness 확인은 [배포 안내](docs/DEPLOYMENT.md)에 정리했다. HTTPS·일반 API 외부 공개·CI/CD는 후속 단계다.
 
 ## 3. Spring 실행
 

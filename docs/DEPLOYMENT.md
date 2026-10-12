@@ -2,7 +2,7 @@
 
 이 문서는 Spring EC2 한 대에서 **Spring 컨테이너 1개와 신규 MySQL 컨테이너 1개**를 실행하는 방법과 각 설정의 이유를 설명한다. Python 모델 서버는 별도 EC2에 배치하며 이 Compose에는 포함하지 않는다.
 
-현재는 **ECR 이미지를 이용한 EC2 수동 기동과 Nginx를 통한 외부 readiness 확인까지 완료**한 단계다. 원격 결과는 사용자가 제공한 실행 출력으로 확인했다. Spring 포트는 호스트의 `127.0.0.1`에만 게시하며, Nginx가 HTTP readiness 경로만 전달한다. HTTPS·일반 API 외부 공개·기존 FastAPI 데이터 이관·GitHub Actions는 후속 작업이다.
+현재는 **ECR 이미지를 이용한 EC2 수동 기동과 Nginx를 통한 외부 readiness 확인까지 완료**한 단계다. 원격 결과는 사용자가 제공한 실행 출력으로 확인했다. Spring 포트는 호스트의 `127.0.0.1`에만 게시하며, Nginx가 HTTP readiness 경로만 전달한다. HTTPS·일반 API 외부 공개·기존 FastAPI 데이터 이관은 후속 작업이다. 이후 추가한 GitHub Actions 코드와 첫 자동 배포 검증 절차는 [CI/CD 안내](CI_CD.md)를 따른다. 자동 배포가 시작된 서버의 상태 확인·복구에는 그 문서의 버전별 Compose 경로를 사용한다.
 
 이미지 전달 방식은 **서울 리전(`ap-northeast-2`)의 비공개 Amazon ECR**을 기준으로 한다. ECR 업로드·EC2 역할을 이용한 다운로드·Compose 기동 결과를 확인했으며, 아래 절차는 그 구성을 다시 확인하거나 새 환경을 준비할 때 참고한다. 기존 환경에서 최초 초기화 단계를 반복하지 않는다.
 
@@ -102,7 +102,7 @@ AWS 권한은 다음처럼 나눈다. 같은 계정의 IAM 정책을 기준으�
 |---|---|
 | Mac의 배포용 AWS 로그인 | `magnavi-api` 저장소에 이미지 업로드와 digest 조회 |
 | Spring EC2에 연결한 IAM 역할 | `magnavi-api` 저장소에서 이미지 다운로드 |
-| 이후 GitHub Actions | `release` 배포용 역할을 별도로 준비. 현재 수동 로그인 정보를 복사하지 않음 |
+| GitHub Actions | `release` 배포용 OIDC 역할 사용. 현재 수동 로그인 정보를 복사하지 않음. [자동 배포 안내](CI_CD.md) 참고 |
 
 두 주체 모두 `ecr:GetAuthorizationToken`은 `Resource: "*"`에 허용해야 로그인할 수 있다. 실제 이미지 작업은 `arn:aws:ecr:ap-northeast-2:ACCOUNT_ID:repository/magnavi-api`로 한정한다. `ACCOUNT_ID`는 실제 AWS 계정 ID로 바꾸는 설명용 표시다.
 
@@ -349,7 +349,7 @@ sudo docker compose --env-file .env.prod -f compose.prod.yaml up -d --no-deps --
 
 root 구성의 로컬 설정 검증은 실제 env 자동 로딩을 끄고 `--env-file /dev/null`과 검사용 값으로 수행한다. 두 Compose의 필수 값 검사·root 비밀번호 전달·DB 비공개와 Spring 루프백 게시·볼륨 식별자 유지를 확인한다. Java 21 기존 테스트는 Testcontainers의 격리 DB를 사용하며 실제 env나 운영 DB에 연결하지 않는다.
 
-로컬 검증·수동 기동 성공은 EC2의 CPU·메모리·네트워크 부하 검증을 대신하지 않는다. HTTPS·일반 API 외부 연결·실제 앱/모델 연동·백업/복원·부하 검증·`release` 기반 GitHub Actions는 남아 있다. 이번 설정 정리에는 자동 배포 워크플로와 AWS 권한 변경을 포함하지 않는다.
+로컬 검증·수동 기동 성공은 EC2의 CPU·메모리·네트워크 부하 검증을 대신하지 않는다. HTTPS·일반 API 외부 연결·실제 앱/모델 연동·백업/복원·부하 검증은 남아 있다. 위 수동 배포 기록과 이후 추가한 [CI/CD 코드·검증 범위](CI_CD.md)는 구분한다. 실제 첫 release 자동 배포는 별도 확인 대상이다.
 
 ## 8. 참고 문서
 

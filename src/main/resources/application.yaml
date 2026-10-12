@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: MagNavi_SpringServer
+  # 임시 기본 계정 대신 명시적인 보안 정책을 사용한다. JWT 인증은 회원 단계에서 연결한다.
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-timeout: 5000
+      initialization-fail-timeout: 5000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    clean-disabled: true
+    baseline-on-migrate: false
+  sql:
+    init:
+      mode: never
+
+magnavi:
+  model-grpc:
+    # 실제 Python·앱 규격 확인 전에는 비활성으로 유지한다. 다른 업무 API는 계속 동작한다.
+    enabled: ${MODEL_GRPC_ENABLED:false}
+    host: ${MODEL_GRPC_HOST:}
+    port: ${MODEL_GRPC_PORT:50051}
+    plaintext: ${MODEL_GRPC_PLAINTEXT:false}
+    sensor-profile-id: ${MODEL_SENSOR_PROFILE_ID:}
+    max-streams: 32
+    max-pending-samples: 32
+    max-buffered-events: 32
+    max-message-bytes: 65536
+    start-timeout: 3s
+    response-timeout: 5s
+    idle-timeout: 30s
+  naver-search:
+    # 키와 실제 응답의 좌표 단위를 확인한 뒤 활성화한다. 준비 전에는 검색만 503을 반환한다.
+    enabled: ${NAVER_SEARCH_ENABLED:false}
+    client-id: ${NAVER_SEARCH_CLIENT_ID:}
+    client-secret: ${NAVER_SEARCH_CLIENT_SECRET:}
+    coordinate-format: ${NAVER_SEARCH_COORDINATE_FORMAT:UNCONFIRMED}
+    connect-timeout-ms: 1000
+    request-timeout-ms: 3000
+    requests-per-member-per-minute: 30
+    requests-per-minute: 300
+    max-concurrent-requests: 4
+  jwt:
+    # 실제 키는 저장소에 넣지 않는다. 값이 없거나 약하면 서버 시작을 거절한다.
+    secret-base64: ${JWT_SECRET_BASE64:}
+    issuer: ${JWT_ISSUER:magnavi-api-service}
+    audience: ${JWT_AUDIENCE:magnavi-api}
+    access-token-ttl: 30m
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+
+logging:
+  pattern:
+    level: '%5p [traceId:%X{traceId:-}]'

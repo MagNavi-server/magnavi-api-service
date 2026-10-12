@@ -1,0 +1,84 @@
+name: Spring release deployment
+
+on:
+  push:
+    branches: [release]
+
+permissions:
+  contents: read
+
+# 진행 중인 배포는 중단하지 않습니다. EC2에도 별도의 잠금·순서 검사가 있습니다.
+concurrency:
+  group: spring-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: verify-and-deploy
+    if: github.repository == 'MagNavi-server/magnavi-api-service'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write # GitHub가 이번 실행의 신원을 증명하는 OIDC 토큰을 발급합니다.
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      AWS_PAGER: ''
+    steps:
+      - name: 배포할 release 커밋 가져오기
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 설정과 최신 release 여부 확인
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          test -n "$AWS_REGION" && test -n "$ECR_REPOSITORY"
+          test -n "$EC2_INSTANCE_ID" && test -n "$AWS_DEPLOY_ROLE_ARN"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release" --jq '.object.sha')" = "$GITHUB_SHA"
+
+      - name: Java 21 준비
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 배포 코드와 애플리케이션 검증
+        # PR 검사가 있었더라도 실제 release 커밋을 다시 검사합니다.
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          ./gradlew --no-daemon clean build --console=plain
+
+      - name: OIDC로 임시 AWS 권한 받기
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: magnavi-${{ github.run_id }}-${{ github.run_attempt }}
+          role-duration-seconds: 3600
+
+      - name: AMD64 이미지 빌드와 ECR 업로드
+        id: image
+        run: |
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          registry="$account_id.dkr.ecr.$AWS_REGION.amazonaws.com"
+          image_tag="$registry/$ECR_REPOSITORY:$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          docker buildx build --platform linux/amd64 --tag "$image_tag" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --push --metadata-file "$RUNNER_TEMP/image-metadata.json" .
+          digest="$(jq -er '.["containerimage.digest"] | select(test("^sha256:[a-f0-9]{64}$"))' "$RUNNER_TEMP/image-metadata.json")"
+          echo "reference=$registry/$ECR_REPOSITORY@$digest" >> "$GITHUB_OUTPUT"
+
+      - name: EC2 Spring 교체와 SSM 완료 확인
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_IMAGE: ${{ steps.image.outputs.reference }}
+        run: |
+          # 오래된 실행을 다시 눌러 최신 release를 덮어쓰지 않게 한 번 더 확인합니다.
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release" --jq '.object.sha')" = "$GITHUB_SHA"
+          python3 scripts/deploy_ssm.py

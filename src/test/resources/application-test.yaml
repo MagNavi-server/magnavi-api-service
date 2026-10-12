@@ -1,0 +1,11 @@
+# @ServiceConnection이 임시 MySQL 연결을 주입한다. 운영·개발 접속 정보는 사용하지 않는다.
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:1/magnavi_test_requires_testcontainers
+    username: unused
+    password: unused
+
+logging:
+  level:
+    root: WARN
+    com.example.magnavi_springserver: INFO

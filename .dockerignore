@@ -1,0 +1,10 @@
+# 기본적으로 모든 파일을 빌드 전송 대상에서 제외합니다.
+# 소스·.env·SSH 키·Git·IDE 설정을 Docker 빌드 환경으로 보내지 않기 위해서입니다.
+**
+
+# 이미지 작성법과 빌드 완료된 JAR만 허용합니다.
+# 실제 이미지에는 Dockerfile의 COPY로 지정한 실행 JAR 하나만 들어갑니다.
+!Dockerfile
+!build/
+!build/libs/
+!build/libs/*.jar

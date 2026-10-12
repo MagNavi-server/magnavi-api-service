@@ -1,0 +1,6 @@
+# DB_URL·DB_USERNAME·DB_PASSWORD는 공통 설정을 통해 외부에서 받는다.
+# 운영에서는 애플리케이션 및 보안 디버그 로그를 켜지 않는다.
+logging:
+  level:
+    root: INFO
+    org.springframework.security: WARN

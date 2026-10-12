@@ -45,7 +45,7 @@ MySQL은 `127.0.0.1:13306`, DB 이름은 `magnavi_local`, Spring의 접속 계�
 docker compose -f compose.local.yaml stop
 ```
 
-기존 볼륨이 있으면 `.env`의 비밀번호를 바꾸는 것만으로 MySQL 계정 비밀번호가 변경되지는 않는다. 이전 앱 전용 계정 구성에서 바꾸는 경우에도 기존 root 접속 권한·비밀번호를 확인하며, 볼륨을 삭제해 해결하지 않는다. 이 Compose는 개발용 MySQL 설정이다. Spring·신규 MySQL의 ECR·EC2 수동 기동과 Nginx 외부 readiness 확인은 [배포 안내](docs/DEPLOYMENT.md)에 정리했다. HTTPS·일반 API 외부 공개·CI/CD는 후속 단계다.
+기존 볼륨이 있으면 `.env`의 비밀번호를 바꾸는 것만으로 MySQL 계정 비밀번호가 변경되지는 않는다. 이전 앱 전용 계정 구성에서 바꾸는 경우에도 기존 root 접속 권한·비밀번호를 확인하며, 볼륨을 삭제해 해결하지 않는다. 이 Compose는 개발용 MySQL 설정이다. Spring·신규 MySQL의 ECR·EC2 수동 기동과 Nginx 외부 readiness 확인은 [배포 안내](docs/DEPLOYMENT.md)에 정리했다. CI/CD 워크플로와 실패 처리 코드는 [자동 배포 안내](docs/CI_CD.md)에 정리했다. 실제 첫 release 자동 배포·HTTPS·일반 API 외부 공개는 후속 확인 대상이다.
 
 ## 3. Spring 실행
 

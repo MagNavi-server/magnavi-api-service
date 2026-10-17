@@ -4,6 +4,8 @@
 
 [전체 모듈 안내](README.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 
+2026-10-15 추가: `AccessTokenDetails`는 기존 JWT 검증 후 만료 시각만 보안 계층에서 WebSocket으로 전달한다. `AuthenticatedMember`와 함께 사용하며 토큰 발급이나 연결 상태 관리는 shared에 넣지 않는다.
+
 ## 1. 무엇을 하는 영역인가?
 
 shared는 여러 모듈이 함께 쓰는 작은 표현과 도구를 모아 두는 곳이다.
@@ -175,7 +177,7 @@ config/             # 루트의 조립 지점; shared 내부가 아님
 └── ...             # 보안·WebSocket·외부 설정 연결
 ```
 
-현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. 2단계에서 persistence·validation의 최소 공통 지원을 추가했다. 3-1단계에서 AuthenticatedMember와 MemberTokenValidator를 구현했다. JWT 키·도구 조립은 config/JwtConfig가 맡는다. gRPC 설정은 6단계에서 구현했고 WebSocket 설정은 빈 골격이다. 추가 공통 도구는 실제 필요에 따라 구현한다.
+현재 `error`에는 ErrorResponse·GlobalExceptionHandler·SecurityErrorResponseWriter·ApiErrorController, `observability`에는 TraceIdGenerator·RequestTraceFilter를 구현했다. 루트 config의 SecurityConfig도 동작한다. 2단계에서 persistence·validation의 최소 공통 지원을 추가했다. 3-1단계에서 AuthenticatedMember와 MemberTokenValidator를 구현했다. JWT 키·도구 조립은 config/JwtConfig가 맡는다. gRPC 설정은 6단계, 기본 비활성 WebSocket 설정은 7단계에서 구현했다. 추가 공통 도구는 실제 필요에 따라 구현한다.
 
 회원·장소 엔티티를 같은 베이스 엔티티에 억지로 맞추는 것도 필수 사항이 아니다. 생성·수정 시각처럼 정말 같은 의미의 공통 항목인지부터 판단한다.
 

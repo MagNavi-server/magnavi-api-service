@@ -10,7 +10,7 @@
 
 Python의 모델 로딩·버퍼·전처리 내부 구현은 이 문서의 범위가 아니다. 모델 서비스와 합의할 입력·출력·오류 계약 및 연동 조건만 다룬다.
 
-현재 1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 장소 조회, 4-2단계 모델 코드 매핑 내부 조회, 4-3단계 네이버 검색, 5-1단계 실내 즐겨찾기를 구현했다. 기존 스키마·8개 JPA 엔티티를 유지하며 회원 API 4개·실내 조회 API 7개·외부 검색 API 1개·실내 즐겨찾기 API 3개를 제공한다. 실제 네이버 키·좌표 확인, 소셜 로그인·교통/외부 즐겨찾기·실시간·배포는 후속 단계다. 실행 방법은 [README](README.md)를 참고한다.
+현재 1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 장소 조회, 4-2단계 모델 코드 매핑 내부 조회, 4-3단계 네이버 검색, 5-1단계 실내 즐겨찾기를 구현했다. 기존 스키마·8개 JPA 엔티티를 유지하며 회원 API 4개·실내 조회 API 7개·외부 검색 API 1개·실내 즐겨찾기 API 3개를 제공한다. 실제 네이버 키·좌표 확인, 소셜 로그인·교통/외부 즐겨찾기·실제 앱/모델 연동은 후속 단계다. 배포 상태는 별도 배포 문서를 기준으로 확인한다. 실행 방법은 [README](README.md)를 참고한다.
 
 개발 작업의 공통 기준은 [커밋 컨벤션](docs/convention/commit-convention.md)과 [브랜치·PR·배포 규칙](docs/convention/branch-convention.md)을 따른다.
 
@@ -22,20 +22,22 @@ Python의 모델 로딩·버퍼·전처리 내부 구현은 이 문서의 범위
 - 10~12장: 작업 순서, 검증, GitHub·Docker·DB 운영·배포.
 - 13장: 구현 전에 확정할 선택 사항.
 
-6단계 추가(2026-09-29): gRPC v1 단일 원본·Java 생성·비동기 호출·제한된 대기열·종료·기존 장소 매핑과 합성 모델 서버 검증을 구현했다. 5단계 마무리는 보류하며 실제 센서 프로필·Python 모델·앱 WebSocket·운영 연동은 후속으로 유지한다. [상세 계약과 검증](docs/api/MODEL_GRPC.md)을 참고한다.
+6단계 추가(2026-09-29): gRPC v1 단일 원본·Java 생성·비동기 호출·제한된 대기열·종료·기존 장소 매핑과 합성 모델 서버 검증을 구현했다. 5단계 마무리는 보류하며 실제 센서 프로필·Python 모델·운영 연동은 후속으로 유지한다. [상세 계약과 검증](docs/api/MODEL_GRPC.md)을 참고한다.
+
+7단계 추가(2026-10-15): JWT 헤더 인증·연결별 JSON 계약·gRPC 중계·만료/유휴·연결/입력/송신 한도·종료를 Spring에서 구현했다. 실제 모바일 소스는 읽기만 했으며 앱 전환·실제 센서 프로필·Python·WSS 검증은 남아 있다. [WebSocket 계약과 검증](docs/api/POSITIONING_WEBSOCKET.md)이 현재 구현 기준이다.
 
 ## 1. 현재 파일에서 수정·추가할 내용
 
 | 대상 | 현재 상태 | 구현할 내용 |
 |---|---|---|
-| `build.gradle` | 기존 BOM 버전 유지, MySQL Testcontainers·gRPC/protobuf 생성·전체 빌드 확인 | WebSocket, 기능별 의존성·실제 Python 호환 확인 |
+| `build.gradle` | 기존 BOM 버전 유지, MySQL Testcontainers·gRPC/protobuf·WebSocket 사용 | 기능별 의존성·실제 Python 호환 확인 |
 | `settings.gradle` | 단일 프로젝트 | 초기에는 단일 빌드 유지, 필요 시 프로젝트 표시 이름 정리 |
 | 시작 클래스와 기본 패키지 | `com.example.magnavi_springserver` | 기능 모듈 추가, 패키지 이름을 바꾸려면 테스트·스캔 경로 함께 정리 |
 | `application*.yaml` | 환경별 DB·Flyway/JPA·상태 확인·JWT·네이버 검색·gRPC 주소/한도 설정 | 소셜 인증·실제 모델 연결 설정 |
 | `src/main/resources/db/migration/` | V1 회원·V2 장소·V3 즐겨찾기 구현 | 후속 스키마 확장·별도 데이터 이관 |
 | `src/main/proto/` | v1 계약·Java 메시지·비동기 stub 생성 구현 | 실제 센서 프로필 확인·Python의 같은 계약 버전 참조 |
 | 회원·장소·즐겨찾기 모듈 | JPA 기반·일반 회원·JWT·실내 조회·모델 매핑·외부 검색·실내 즐겨찾기 API 구현 | 소셜 로그인·교통/외부 즐겨찾기, 실제 네이버·앱 전환 확인 |
-| `positioning` 모듈 | gRPC 호출·순서/대기열/시간 제한·취소·장소 매핑 구현 | WebSocket·사용자별 세션·실제 Python 연동 |
+| `positioning` 모듈 | WebSocket 인증·세션·gRPC 중계·한도·취소·장소 매핑 구현 | 실제 앱·Python 연동·운영 검증 |
 | 기반·DB·회원·장소 테스트 | 기존 97개에 검색·외부 장애·한도 검증 추가 | 소셜·실제 모델 매핑·실제 네이버·계약·연동 검증 추가 |
 | Docker·CI·배포 설정 | 개발용 MySQL Compose와 Spring·신규 MySQL 배포 파일 구현 | EC2 기동·HTTPS·백업·release 개별 배포·복구, 상세는 12장과 [배포 안내](docs/DEPLOYMENT.md) |
 
@@ -80,9 +82,9 @@ com.example.magnavi_springserver/
 └── config/               # 보안·연결·환경 설정을 조립하는 지점
 ```
 
-위 패키지 구조와 역할별 빈 클래스를 준비한 뒤 공통 오류·요청 추적·기본 보안을 구현했다. 2단계에서 업무 도메인 8개를 JPA 엔티티로 매핑하고 모듈 내부 `infrastructure/persistence`에 Spring Data JPA 저장소 8개를 추가했다. 3-1단계에서 일반 회원 서비스·API와 MemberPersistenceAdapter를 구현했다. 서비스가 같은 모듈의 구체 어댑터를 주입받는 간단한 구조이며, 아직 필요하지 않은 저장·해싱 인터페이스는 추가하지 않았다. 4-1단계에서는 PlaceController·PlaceQueryService·PlacePersistenceAdapter와 JPQL 조회 전용 PlaceReadRepository를 연결했다. 4-3단계 외부 검색과 5-1단계 실내 즐겨찾기 API·장소 묶음 조회도 연결했다. 교통/외부 즐겨찾기·앱 실시간 API는 구현 전이다. ModelStreamClient와 gRPC 어댑터는 6단계에서 구현했다.
+위 패키지 구조와 역할별 빈 클래스를 준비한 뒤 공통 오류·요청 추적·기본 보안을 구현했다. 2단계에서 업무 도메인 8개를 JPA 엔티티로 매핑하고 모듈 내부 `infrastructure/persistence`에 Spring Data JPA 저장소 8개를 추가했다. 3-1단계에서 일반 회원 서비스·API와 MemberPersistenceAdapter를 구현했다. 서비스가 같은 모듈의 구체 어댑터를 주입받는 간단한 구조이며, 아직 필요하지 않은 저장·해싱 인터페이스는 추가하지 않았다. 4-1단계에서는 PlaceController·PlaceQueryService·PlacePersistenceAdapter와 JPQL 조회 전용 PlaceReadRepository를 연결했다. 4-3단계 외부 검색과 5-1단계 실내 즐겨찾기 API·장소 묶음 조회도 연결했다. 교통/외부 즐겨찾기·실제 앱 전환은 후속이다. ModelStreamClient와 gRPC 어댑터는 6단계, Spring WebSocket 입구는 7단계에서 구현했다.
 
-`SecurityConfig`는 실제 보안 필터를 등록하며, gRPC 설정은 6단계에서 구현했고 WebSocket 설정은 빈 골격이다. 테스트 소스와 V1~V3 마이그레이션 SQL을 추가했다. .gitkeep·더미 테스트·빈 SQL은 만들지 않는다. src/main/proto는 6단계 v1 계약의 단일 원본이다. 기능에 필요한 경계와 인터페이스는 실제 구현 단계에서 추가한다.
+`SecurityConfig`는 실제 보안 필터를 등록하며, gRPC 설정은 6단계, 기본 비활성 WebSocket 설정은 7단계에서 구현했다. 테스트 소스와 V1~V3 마이그레이션 SQL을 추가했다. .gitkeep·더미 테스트·빈 SQL은 만들지 않는다. src/main/proto는 6단계 v1 계약의 단일 원본이다. 기능에 필요한 경계와 인터페이스는 실제 구현 단계에서 추가한다.
 
 업무 모듈은 member·place·favorite·positioning이다. shared는 공통 지원 영역이고 config는 설정을 연결하는 조립 지점이다. shared가 업무 모듈 내부를 참조하지 않도록 하고, 모듈 간에는 공개 Java 기능으로 호출한다. 별도 서버인 모델 서비스와 통신할 때만 gRPC를 사용한다.
 
@@ -297,11 +299,11 @@ Resource Server와 JwtDecoder는 서비스 요청의 JWT 검증 기반이다. �
 
 ## 8. WebSocket과 비동기 gRPC 연결
 
-현재 6단계에서 구현한 gRPC 부분의 기준은 [MODEL_GRPC.md](docs/api/MODEL_GRPC.md)다. 아래 설명에는 7·8단계의 앱 연결·운영 목표도 포함한다. gRPC 계약 원본은 Spring `src/main/proto/magnavi/positioning/v1/positioning.proto`로 두었으며 실제 앱 센서 프로필은 아직 미확정이다.
+현재 6단계에서 구현한 gRPC 부분의 기준은 [MODEL_GRPC.md](docs/api/MODEL_GRPC.md)다. 7단계 앱 입구는 [WebSocket 안내](docs/api/POSITIONING_WEBSOCKET.md)에 구현을 구분했다. 아래 설명에는 실제 앱·모델 전환과 운영 목표도 포함한다. gRPC 계약 원본은 Spring `src/main/proto/magnavi/positioning/v1/positioning.proto`로 두었으며 실제 앱 센서 프로필은 아직 미확정이다.
 
 ### 8.1 앱과의 통신 방식
 
-현재 MVC 구성을 유지하면서 WebSocket 핸들러를 추가하는 방안을 제안한다. 단순 센서·결과 송수신부터 시작하며, STOMP나 메시지 브로커는 필요가 확인될 때 검토한다.
+현재 MVC 구성을 유지하고 `/ws/positioning` WebSocket 핸들러를 구현했다. 단순 센서·결과 송수신부터 시작하며, STOMP나 메시지 브로커는 필요가 확인될 때 검토한다.
 
 1. 앱이 측정 연결을 요청한다.
 2. 토큰을 검증하고 사용자를 확인한다.
@@ -330,7 +332,7 @@ Resource Server와 JwtDecoder는 서비스 요청의 JWT 검증 기반이다. �
 
 ### 8.3 필요한 통신 계약
 
-아래는 전체 연결에 필요한 정보다. 6단계의 정확한 gRPC 필드와 순번·시간·오류 규칙은 `.proto`와 MODEL_GRPC.md를 따른다. 앱 WebSocket 이벤트 형식은 별도로 확정한다.
+아래는 전체 연결에 필요한 정보다. 6단계의 정확한 gRPC 필드와 순번·시간·오류 규칙은 `.proto`와 MODEL_GRPC.md를 따른다. 앱 WebSocket v1 이벤트는 POSITIONING_WEBSOCKET.md를 따른다.
 
 | 구분 | 필요한 내용 |
 |---|---|
@@ -372,7 +374,7 @@ Spring은 이번 연동에서 gRPC 클라이언트이므로 추론 호출을 위
 - 모델 또는 앱이 느려지면 흐름 제어를 적용하고 한도를 지속 초과하면 명확히 종료한다.
 - 누락을 숨긴 채 센서 샘플을 버리거나 과거 샘플을 자동 재전송하지 않는다.
 
-WebSocket의 기본 세션은 동시 송신을 전제로 하지 않으므로 동기화된 송신 경로나 제한 설정을 갖춘 래퍼 등을 검토한다. 참고: [Spring WebSocket API](https://docs.spring.io/spring-framework/reference/web/websocket/server.html).
+WebSocket은 연결별 결과 작업자와 제한 설정을 갖춘 송신 래퍼를 사용한다. 내장 Tomcat의 동기 송신 제한도 설정한다. 참고: [Spring WebSocket API](https://docs.spring.io/spring-framework/reference/web/websocket/server.html).
 
 서버가 여러 인스턴스라면 인스턴스별 제한만으로 사용자 전체 한도가 보장되지 않는다. 초기 배포 범위를 명시하고, 분산 환경의 전역 제한 저장소는 필요 시 설계한다.
 
@@ -394,7 +396,7 @@ WebSocket의 기본 세션은 동시 송신을 전제로 하지 않으므로 동
 
 ### 9.1 오류 응답
 
-1단계에서 REST·보안·서블릿 오류에 `code`, `message`, `traceId`, `errors`를 적용했다. MVC의 상태와 필요한 헤더를 유지하고 필드 검증은 입력값 없이 안내한다. 업무별 코드와 WebSocket 오류 계약은 후속 구현 범위다.
+1단계에서 REST·보안·서블릿 오류에 `code`, `message`, `traceId`, `errors`를 적용했다. MVC의 상태와 필요한 헤더를 유지하고 필드 검증은 입력값 없이 안내한다. 업무별 오류 코드는 해당 API 문서를 따르며 WebSocket 오류 계약은 7단계 안내에 정의했다.
 
 업무 오류는 공통 REST 오류 DTO로, WebSocket 오류는 정의된 이벤트로 변환한다. 통신 방식이 달라도 오류 코드의 의미는 일관되게 유지한다.
 
@@ -438,7 +440,7 @@ DB 설정과 연결, JWT 키의 형식·최소 길이와 토큰 정책은 기동
 | 4. 장소 | 실내 조회·모델 매핑·네이버 검색·선택적 자체 장소 | 4-1 실내 조회·4-2 모델 매핑·4-3 네이버 검색 구현. 실제 기준 데이터 등록·네이버 키/좌표/앱 연동 확인은 후속 작업 |
 | 5. 즐겨찾기 | 내부/외부 유형·소유권·중복·목록·삭제 | 5-1 실내 API 구현: 소유권·비활성 표시·동시 등록/삭제·묶음 조회 검증, 전체 170개 테스트·빌드 통과. 5-2 교통·5-3 외부 저장·앱 전환은 후속 |
 | 6. 계약·모델 호출 | v1 계약·Java 생성·비동기 stub·합성 모델·장소 매핑 | Spring 구현·검증 완료: 총 218개 테스트·빌드 통과. 실제 센서 프로필·Python·앱은 후속 |
-| 7. 앱 실시간 연결 | WebSocket 인증·세션·한도·취소·재접속 | 다중 클라이언트에 각자의 결과 전달 |
+| 7. 앱 실시간 연결 | WebSocket 인증·세션·한도·취소·재접속 | Spring 구현·합성 연동 검증. 실제 앱·Python·WSS·부하는 후속 |
 | 8. 실제 통합·성능 | 실제 모델 서비스 연동·지연·부하 측정 | 목표 규모·오류율·자원 한도 충족 |
 | 9. 배포·전환 | Docker·Compose·DB 볼륨/백업·CI/CD·상태 확인·복구·앱 전환 | 컨테이너 교체 후 데이터 유지·격리 복원·재접속과 DB 쓰기 주체/API 전환 확인 |
 
@@ -639,7 +641,7 @@ Compose는 특정 서비스만 교체할 수 있다. 참고: [Compose 운영 배
 | 장소 범위·권한 | 자체 실외 장소 관리 여부·기존 데이터 보존·외부 검색 공개/한도·변경 권한. 실내 조회 GET 7개는 공개 구현 |
 | 장소·즐겨찾기 참조 | 유형·실제 외부 ID·네이버 ID 부재·내부 FK·삭제·중복 기준 |
 | 모델 코드 매핑 | 모델 버전·건물 구분과 매핑 데이터 관리 방식 |
-| 앱 WebSocket 계약 | 인증 전달 방법·메시지 형식·만료·재접속 |
+| 앱 WebSocket 계약 | Spring v1 구현: JWT 헤더·JSON·만료 시 종료·재접속은 새 세션. 실제 앱 전환 후속 |
 | gRPC 계약 | 6단계: Spring 원본·v1·생성·오류·순번·상대 시간 규칙 구현. 실제 센서 프로필·Python 계약 소비 방식 후속 |
 | 성능·한도 | 동시 사용자·주파수·큐 크기·허용 지연·연결 수 |
 | EC2 배치 | 확정: Spring·신규 MySQL은 같은 EC2, Python은 별도 EC2. 실제 부하·장애 영향 검증은 후속 |
@@ -652,4 +654,4 @@ Compose는 특정 서비스만 교체할 수 있다. 참고: [Compose 운영 배
 
 목표 범위는 일반 로그인 유지안·카카오/구글 로그인, 실내 장소·모델 매핑, 네이버 검색, 즐겨찾기, 인증된 실시간 예측 연동이다. 외부 즐겨찾기 스냅샷은 저장 허용 조건 확인 후 적용한다. 자체 실외 장소·계정 연결/해제·회원 탈퇴·토큰 재발급·로그아웃·실내 관리자 API·분산 제한 저장소의 초기 포함 여부는 별도로 확정한다.
 
-현재 완료 범위는 설계·업무 골격, 1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 조회, 4-2단계 모델 코드 매핑 내부 조회, 4-3단계 네이버 검색, 5-1단계 실내 즐겨찾기다. 최신 검증 결과는 README에 기록한다. 실제 매핑 데이터 등록·네이버 실서비스/앱 연동·소셜 인증·교통/외부 즐겨찾기·기존 데이터 이관·실제 앱/모델 연동·HTTPS 및 첫 자동 배포의 실제 성공 확인은 후속 단계다. CI/CD 구현·검증 범위는 [자동 배포 안내](docs/CI_CD.md)를 참고한다. EC2 수동 기동·상태 확인 범위는 12.6절을 참고한다.
+현재 완료 범위는 설계·업무 골격, 1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 조회, 4-2단계 모델 코드 매핑 내부 조회, 4-3단계 네이버 검색, 5-1단계 실내 즐겨찾기, 6단계 gRPC, 7단계 Spring WebSocket이다. 실제 앱·Python 전환과 운영 활성화는 별도이며 최신 검증 결과는 README에 기록한다. 실제 매핑 데이터 등록·네이버 실서비스/앱 연동·소셜 인증·교통/외부 즐겨찾기·기존 데이터 이관·실제 앱/모델 연동·HTTPS 및 첫 자동 배포의 실제 성공 확인은 후속 단계다. CI/CD 구현·검증 범위는 [자동 배포 안내](docs/CI_CD.md)를 참고한다. EC2 수동 기동·상태 확인 범위는 12.6절을 참고한다.

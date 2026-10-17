@@ -18,7 +18,7 @@ PositioningSessionService.open(modelKey, modelVersion)
   → close() 시 gRPC 취소·대기열 정리
 ```
 
-현재는 내부 Java 기능이며 공개 REST·WebSocket 경로를 추가하지 않았다. 테스트용 모델은 Java JUnit 안에서 루프백 TCP 서버로 실행한다. 고정된 합성 응답만 반환하며 실제 Python 추론을 검증한 것은 아니다.
+6단계에서는 내부 Java 기능을 구현했다. 2026-10-15의 7단계에서 이 기능을 사용하는 [인증된 앱 WebSocket](POSITIONING_WEBSOCKET.md)을 추가했으며 기본 비활성이다. 테스트용 모델은 Java JUnit 안에서 루프백 TCP 서버로 실행한다. 고정된 합성 응답만 반환하며 실제 Python 추론을 검증한 것은 아니다.
 
 ## 2. 규격의 단일 원본과 생성
 

@@ -1,10 +1,10 @@
 # positioning — 실시간 위치 연결 모듈
 
-작성일: 2026-09-10 · 6단계 구현일: 2026-09-29 · 상태: Spring gRPC 구현·검증, 앱 WebSocket·실제 Python 연동 예정
+작성일: 2026-09-10 · 6단계 구현일: 2026-09-29 · 7단계 구현일: 2026-10-15 · 상태: Spring WebSocket·gRPC 구현, 실제 앱·Python 연동 예정
 
 [전체 모듈 안내](README.md) · [장소 모듈](PLACE.md) · [Spring 구현 계획](../../IMPLEMENTATION_PLAN.md) · [DB 스키마](../../DATABASE_SCHEMA.md)
 
-현재 `PositioningSessionService`·`PositioningConnection`·`ModelStreamClient`·`GrpcModelStreamClient`와 설정을 구현했다. `.proto`에서 Java 메시지·stub을 생성하고 루프백 합성 서버로 양방향 통신·한도·취소·장소 매핑을 검증했다. `PositioningWebSocketHandler`·`PositioningSession`·`InMemorySessionRegistry`는 7단계의 앱 연결을 위한 빈 골격이다. 아래 설계에는 후속 목표도 포함한다. 현재 규격·설정·테스트 범위는 [모델 gRPC 안내](../api/MODEL_GRPC.md)가 기준이다.
+현재 `PositioningSessionService`·`PositioningConnection`·`ModelStreamClient`·`GrpcModelStreamClient`와 설정을 구현했다. `.proto`에서 Java 메시지·stub을 생성하고 루프백 합성 서버로 양방향 통신·한도·취소·장소 매핑을 검증했다. `PositioningWebSocketHandler`·`PositioningSession`·`InMemorySessionRegistry`와 인증·JSON 변환·연결 작업자를 7단계에서 구현했다. 앱 연결 규격은 [WebSocket 안내](../api/POSITIONING_WEBSOCKET.md)를 따른다. 아래 설계에는 후속 목표도 포함한다. 현재 규격·설정·테스트 범위는 [모델 gRPC 안내](../api/MODEL_GRPC.md)가 기준이다.
 
 ## 1. 무엇을 하는 모듈인가?
 
@@ -42,7 +42,7 @@ WebSocket은 앱과 서버가 연결을 유지하면서 양쪽으로 메시지�
 
 Spring은 이번 연동에서 gRPC 클라이언트다. 모델 서버를 호출하기 위해 Spring에 gRPC 서버 역할까지 추가할 필요는 없다.
 
-기존 `POST /predict`를 센서 한 건마다 호출하던 방식은 실시간 연결로 전환한다. WebSocket 경로와 메시지 규격은 아직 확정 전이며, 기존 REST API와 자동으로 호환되지는 않는다.
+기존 `POST /predict`를 센서 한 건마다 호출하던 방식은 실시간 연결로 전환한다. Spring의 `/ws/positioning` v1 JSON을 구현했으며, 기존 앱 REST 요청과 자동으로 호환되지는 않는다.
 
 ## 4. 회원과 측정 세션은 어떻게 다른가?
 
@@ -63,7 +63,7 @@ Spring은 이번 연동에서 gRPC 클라이언트다. 모델 서버를 호출�
 앱 B 연결 → 세션 B-1 → gRPC 스트림 B → 앱 B로 결과
 ```
 
-세션을 회원 ID 하나로만 구분하면 재접속 전후나 여러 기기의 연결이 섞일 수 있다. 같은 회원의 동시 측정을 허용할지는 별도의 제한 정책으로 정한다.
+세션을 회원 ID 하나로만 구분하면 재접속 전후나 여러 기기의 연결이 섞일 수 있다. 기본값은 인스턴스당 전체 32개·회원당 2개 연결이며 설정으로 조정한다.
 
 gRPC 채널은 모델 서버로 가는 통신 기반이다. 채널은 재사용하되, 측정 세션마다 독립된 스트리밍 호출을 만든다. 하나의 채널을 재사용한다는 이유로 모든 사용자의 센서를 하나의 스트림에 합치지 않는다.
 
@@ -201,7 +201,7 @@ MVC를 모두 WebFlux로 바꾸거나 모든 메서드에 `@Async`를 붙일 필
 
 ## 11. 내부 구성과 다른 모듈의 관계
 
-6단계에서는 application의 모델 호출 경계·연결 핸들과 infrastructure의 gRPC 구현을 연결했다. 아래 표의 WebSocket·앱 세션 상태·레지스트리는 후속 설계다.
+6단계에서는 application의 모델 호출 경계·연결 핸들과 infrastructure의 gRPC 구현을 연결했다. 7단계에서는 아래 WebSocket·앱 세션 상태·레지스트리도 구현했다. 실제 모델·운영 검증은 별도다.
 
 | 계층 | 예시 구성요소 | 역할 |
 |---|---|---|

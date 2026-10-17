@@ -2,9 +2,11 @@
 
 MagNavi의 회원·장소·즐겨찾기와 실시간 측정 연결을 담당할 Spring 서버다. 서버 역할과 목표 구조는 [프로젝트 개요](PROJECT_OVERVIEW.md), 후속 작업은 [구현 계획](IMPLEMENTATION_PLAN.md)을 참고한다.
 
-현재는 **1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 장소 조회, 4-2단계 모델 코드 매핑 조회, 4-3단계 네이버 외부 검색, 5-1단계 실내 장소 즐겨찾기**를 구현했다. 회원 API 4개·실내 조회 API 7개·인증된 외부 검색 API 1개·실내 즐겨찾기 API 3개를 제공한다. 모델 코드 매핑은 Spring 내부 메서드로 제공한다. 검색은 기본 비활성이며 서버에 키와 확인한 좌표 단위를 설정해야 사용할 수 있다. 실제 네이버·앱 지도 연동, 소셜 로그인·버스/정류장 및 외부 장소 즐겨찾기·앱 WebSocket·실제 모델 연동은 후속 작업이다. [외부 검색 안내](docs/api/PLACE_SEARCH_API.md)에 설정과 제한을 정리했다. [회원 API 안내](docs/api/MEMBER_API.md), [장소 조회 안내](docs/api/PLACE_API.md), [실내 즐겨찾기 안내](docs/api/FAVORITE_API.md)에 요청·응답·오류를 정리했다.
+현재는 **1단계 실행·테스트 기반, 2단계 DB 기반, 3-1단계 일반 회원·JWT, 4-1단계 실내 장소 조회, 4-2단계 모델 코드 매핑 조회, 4-3단계 네이버 외부 검색, 5-1단계 실내 장소 즐겨찾기**를 구현했다. 회원 API 4개·실내 조회 API 7개·인증된 외부 검색 API 1개·실내 즐겨찾기 API 3개를 제공한다. 모델 코드 매핑은 Spring 내부 메서드로 제공한다. 검색은 기본 비활성이며 서버에 키와 확인한 좌표 단위를 설정해야 사용할 수 있다. 실제 네이버·앱 지도 연동, 소셜 로그인·버스/정류장 및 외부 장소 즐겨찾기·실제 앱/모델 연동은 후속 작업이다. [외부 검색 안내](docs/api/PLACE_SEARCH_API.md)에 설정과 제한을 정리했다. [회원 API 안내](docs/api/MEMBER_API.md), [장소 조회 안내](docs/api/PLACE_API.md), [실내 즐겨찾기 안내](docs/api/FAVORITE_API.md)에 요청·응답·오류를 정리했다.
 
-6단계 진행 상태(2026-09-29): gRPC v1 계약·Java 코드 생성·비동기 클라이언트·연결별 순서/대기열/시간 제한·취소와 기존 장소 매핑을 구현했다. 실제 루프백 gRPC와 격리 MySQL을 포함한 **218개 테스트** 및 Java 21 전체 빌드가 통과했다. 기능은 기본 비활성이며 실제 앱의 센서 규격·Python 모델·WebSocket은 미연동이다. 5단계 남은 기능은 사용자 결정에 따라 보류했다. [모델 통신 안내](docs/api/MODEL_GRPC.md)에 계약·설정·오류·검증 범위를 정리했다.
+6단계 진행 상태(2026-09-29): gRPC v1 계약·Java 코드 생성·비동기 클라이언트·연결별 순서/대기열/시간 제한·취소와 기존 장소 매핑을 구현했다. 실제 루프백 gRPC와 격리 MySQL을 포함한 **218개 테스트** 및 Java 21 전체 빌드가 통과했다. 기능은 기본 비활성이며 실제 앱의 센서 규격·Python 모델은 미연동이다. 이후 WebSocket 구현은 아래 7단계에 구분한다. 5단계 남은 기능은 사용자 결정에 따라 보류했다. [모델 통신 안내](docs/api/MODEL_GRPC.md)에 계약·설정·오류·검증 범위를 정리했다.
+
+7단계(2026-10-15): JWT로 인증하는 `/ws/positioning`, 시작·센서·결과·종료 JSON, 연결별 gRPC 중계, 만료·연결 수·입력/송신 한도·취소를 구현했다. 기능은 **기본 비활성**이며 모바일·Python 코드는 변경하지 않았다. Java 21 전체 빌드와 **267개 테스트**가 통과했다. 메시지 예시와 앱 전환 항목은 [WebSocket 사용 안내](docs/api/POSITIONING_WEBSOCKET.md)를 참고한다.
 
 ## 1. 준비 환경
 
@@ -75,6 +77,7 @@ curl -i http://127.0.0.1:8080/users/me
 | `POST /users/signup`, `POST /users/login` | 로그인 전 호출 가능. JSON 가입·폼 로그인 |
 | `GET /users/me`, `PUT /users/me/username` | 유효한 JWT와 존재하는 회원 필요 |
 | 건물·층·장소 GET 7개 | 로그인 없이 조회. 정확한 경로는 [장소 API](docs/api/PLACE_API.md) 참고 |
+| `GET /ws/positioning` | 명시적 활성화 시 JWT 인증 후 WebSocket으로 전환. [계약](docs/api/POSITIONING_WEBSOCKET.md) 참고 |
 | 그 외 요청 | 미인증 401, 인증했어도 명시적으로 허용하기 전에는 403 |
 
 상태 확인 응답에는 DB 주소·구성 요소·예외 상세를 공개하지 않는다. 현재 준비 상태에 Python 모델 서비스는 포함되지 않는다.
@@ -151,12 +154,15 @@ Testcontainers는 테스트용 MySQL을 임시 포트로 실행하고 종료 시
 
 2026-09-25의 5-1단계에서는 실내 즐겨찾기 등록·목록·삭제와 장소 묶음 조회를 구현했다. Java 21 `./gradlew build --console=plain`에서 기존 147개와 새 통합 테스트 23개, 총 **170개 테스트** 및 실행 JAR 빌드가 통과했다(실패·오류·건너뜀 0). 실제 JWT·격리 MySQL에서 소유권·입력·정확한 skip·최대 100개·일정한 SQL 횟수·비활성 표시·동시 등록/삭제·UNIQUE/FK 오류와 롤백을 검증했다. 기존의 미구현 경로 차단 테스트 두 곳은 여전히 제공하지 않는 즐겨찾기 상세 GET을 검사하도록 갱신했다. API는 서버가 ID를 생성하는 새 계약이며 실제 앱 전환·기존 데이터 이관·운영 배포는 미검증이다. 관련 구현과 검증 범위는 [이슈 #17](https://github.com/MagNavi-server/magnavi-api-service/issues/17)에서 추적하며 앱 전환·운영 배포는 별도 작업이다.
 
+2026-10-15의 7단계에서는 WebSocket 검증 49개를 추가했다. `./gradlew clean build --console=plain`에서 전체 **267개 테스트**와 실행 JAR 빌드가 통과했다(실패·오류·건너뜀 0). 실제 HTTP 업그레이드·JWT·WebSocket·루프백 gRPC·격리 MySQL을 함께 검증했고 종료 경합·느린 쓰기·늦은 DB 결과는 제어 가능한 대역으로 재현했다. 모바일 앱은 읽기만 했으며 실제 Python 추론·앱 종단 연결·운영 부하는 아직 검증하지 않았다.
+
 ## 7. 관련 문서
 
 - [Spring·MySQL Docker 배포 준비](docs/DEPLOYMENT.md)
 - [일반 회원 API 요청·응답·오류](docs/api/MEMBER_API.md)
 - [건물·층·실내 장소 조회 API](docs/api/PLACE_API.md)
 - [모델 코드 → 장소 내부 조회](docs/api/MODEL_LOCATION_MAPPING.md)
+- [앱 WebSocket 인증·메시지·제한](docs/api/POSITIONING_WEBSOCKET.md)
 - [네이버 외부 검색 API·서버 설정](docs/api/PLACE_SEARCH_API.md)
 
 - [프로젝트 개요](PROJECT_OVERVIEW.md)

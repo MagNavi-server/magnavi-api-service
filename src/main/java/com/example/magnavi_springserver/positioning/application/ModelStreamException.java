@@ -16,6 +16,6 @@ public class ModelStreamException extends RuntimeException {
         this.reason = reason;
     }
 
-    /** 이후 WebSocket 계층에서 안전한 오류 메시지로 변환할 실패 종류를 반환한다. */
+    /** WebSocket 계층에서 안전한 오류 메시지로 변환할 실패 종류를 반환한다. */
     public Reason getReason() { return reason; }
 }

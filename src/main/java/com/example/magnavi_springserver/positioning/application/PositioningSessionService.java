@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.magnavi_springserver.place.application.ModelLocationQueryService;
 
-/** 모델 연결과 장소 매핑을 조립한다. 앱 인증·사용자별 연결 제한은 7단계에서 연결한다. */
+/** 모델 연결과 장소 매핑을 조립한다. 앱 인증·연결 제한은 WebSocket 입구에서 처리한다. */
 @Service
 public class PositioningSessionService {
     private final ObjectProvider<ModelStreamClient> clients;
@@ -17,7 +17,7 @@ public class PositioningSessionService {
         this.places = places;
     }
 
-    /** 내부 호출용 기능이며 아직 인터넷에 공개한 HTTP·WebSocket 경로는 아니다. */
+    /** 검증된 측정 시작 요청마다 독립적인 모델 스트림을 연다. */
     public PositioningConnection open(String modelKey, String modelVersion) {
         var client = clients.getIfAvailable();
         if (client == null) throw new ModelStreamException(ModelStreamException.Reason.NOT_CONFIGURED);

@@ -13,9 +13,11 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import com.example.magnavi_springserver.shared.error.SecurityErrorResponseWriter;
 import com.example.magnavi_springserver.shared.security.AuthenticatedMember;
+import com.example.magnavi_springserver.shared.security.AccessTokenDetails;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보·외부 검색·즐겨찾기에는 JWT를 요구한다.
+ * 가입·로그인·실내 장소 조회·상태 확인을 공개하고, 본인 정보·외부 검색·즐겨찾기·WebSocket에는 JWT를 요구한다.
  */
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfig {
@@ -37,10 +39,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, exception) -> errorWriter.write(request, response, 401))
                         .accessDeniedHandler((request, response, exception) -> errorWriter.write(request, response, 403)))
                 .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(token ->
-                                // sub 검증이 끝난 토큰에서 내부 회원 번호만 업무 계층에 전달한다.
-                                UsernamePasswordAuthenticationToken.authenticated(
-                                        new AuthenticatedMember(Long.valueOf(token.getSubject())), null, List.of())))
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(this::memberAuthentication))
                         .authenticationEntryPoint((request, response, exception) -> errorWriter.write(request, response, 401))
                         .accessDeniedHandler((request, response, exception) -> errorWriter.write(request, response, 403)))
                 .authorizeHttpRequests(requests -> requests
@@ -56,6 +55,8 @@ public class SecurityConfig {
                                 "/floors/{floorId}/locations", "/floors/{floorId}/locations/",
                                 "/locations", "/locations/", "/locations/{locationId}", "/locations/{locationId}/").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/me").authenticated()
+                        // WebSocket 최초 HTTP 연결도 같은 JWT 검증을 거친다.
+                        .requestMatchers(HttpMethod.GET, "/ws/positioning").authenticated()
                         .requestMatchers(HttpMethod.GET, "/places/search", "/places/search/").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/users/me/username").authenticated()
                         // 구현한 세 가지 동작만 연다. 소유권과 현재 회원 확인은 즐겨찾기 서비스가 담당한다.
@@ -64,5 +65,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/favorites/{favoriteId}", "/favorites/{favoriteId}/").authenticated()
                         .anyRequest().denyAll())
                 .build();
+    }
+
+    /** 검증된 회원 번호와 만료 시각만 전달하며 JWT 원문은 보관하지 않는다. */
+    private UsernamePasswordAuthenticationToken memberAuthentication(Jwt token) {
+        var authentication = UsernamePasswordAuthenticationToken.authenticated(
+                new AuthenticatedMember(Long.valueOf(token.getSubject())), null, List.of());
+        authentication.setDetails(new AccessTokenDetails(token.getExpiresAt()));
+        return authentication;
     }
 }

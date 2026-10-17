@@ -9,7 +9,7 @@ import com.example.magnavi_springserver.place.application.PlaceException;
 import com.example.magnavi_springserver.positioning.domain.ModelEvent;
 import com.example.magnavi_springserver.positioning.domain.SensorSample;
 
-/** 이후 WebSocket 계층이 사용할 한 측정의 핸들이다. 긴 DB 트랜잭션을 만들지 않는다. */
+/** WebSocket 계층이 사용하는 한 측정의 핸들이다. 긴 DB 트랜잭션을 만들지 않는다. */
 public final class PositioningConnection implements AutoCloseable {
     private final ModelStream stream;
     private final ModelLocationQueryService places;

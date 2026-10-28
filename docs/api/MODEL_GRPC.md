@@ -164,4 +164,12 @@ Python [계약·실행 안내](https://github.com/MagNavi-server/magnavi-positio
 Spring 게시 후 Python lock의 원본 커밋 표시는 별도 갱신이 필요하다. 현재 사본의 내용·해시는 동일하다.
 부하 성능 개선이나 실제 위치 정확도를 입증한 결과는 아니다.
 
-게시 준비 중 확인(2026-10-28): 첫 전체 실행은 269개 중 기존 WebSocket 바이너리 거절 테스트의 정리 단계에서 1개 실패했다. 오류 응답·모델 취소 확인 이후 `Probe.close()`의 `sendClose()`가 `Output closed`를 반환했다. 동일 코드의 WebSocket 모음 재실행과 전체 `test build --rerun-tasks` 재검증에서 269개 모두 통과하고 JAR 빌드가 성공했다(실패·오류·건너뜀 0). 종료 콜백과 테스트의 정리 요청 사이 경합 가능성은 남아 있다. 테스트 보조 코드의 보완은 이번 계약 게시에 섞지 않았다.
+게시 준비 중 확인(2026-10-28): 첫 전체 실행은 269개 중 기존 WebSocket 바이너리 거절 테스트의 정리 단계에서 1개 실패했다. 오류 응답·모델 취소 확인 이후 `Probe.close()`의 `sendClose()`가 `Output closed`를 반환했다. 동일 코드의 WebSocket 모음 재실행과 전체 `test build --rerun-tasks` 재검증에서 269개 모두 통과하고 JAR 빌드가 성공했다(실패·오류·건너뜀 0). 당시 종료 콜백과 정리 요청 사이 경합을 미해결로 기록했으며, 이후 보완은 아래에 구분한다.
+
+### WebSocket 테스트 종료 경합 보완(2026-10-28)
+
+- 원인: `closed.isDone()` 확인과 `sendClose()` 사이에 서버의 종료 콜백이 실행되면, JDK의 자동 종료 응답이 먼저 송신부를 닫을 수 있다. 사용 중인 Java 21 소스의 처리 순서를 확인하고 소켓 대역으로 같은 `Output closed` 오류를 재현했다. 최초 실패 당시 스레드 실행 순서를 직접 수집한 것은 아니다.
+- 해결: `Probe.onClose()`의 종료 기록과 `Probe.close()`의 상태 확인·종료 요청을 같은 잠금으로 보호한다. 완료 대기는 잠금 밖에서 수행하여 종료 콜백을 막지 않는다. 송신부가 이미 닫혔어도 종료 결과를 확인하고, 전송 실패·통신 오류·각 단계 3초 시간 초과는 그대로 전달하면서 `abort()`로 자원을 정리한다.
+- 회귀 검증: [종료 처리 테스트](../../src/test/java/com/example/magnavi_springserver/positioning/PositioningWebSocketProbeTests.java) 7개를 추가했다. 기존 정리 코드에서는 경합 재현·오류 전파·실패 시 정리 항목 5개가 실패했고, 수정 후 7개와 기존 실제 WebSocket 통합 12개가 모두 통과했다. 테스트 재시도나 예외 무시는 추가하지 않았다.
+- 전체 검증: Java 21에서 위 Python 경로를 지정한 `./gradlew test build --no-daemon --console=plain` 실행 결과 276개 통과(실패·오류·건너뜀 0), 빌드 성공. 실제 Python 테스트 1개 안의 144개 예측 비교도 포함한다. 운영 코드·계약·의존성 변경과 부하 성능 측정은 없다.
+- 게시 범위: [이슈 #32](https://github.com/MagNavi-server/magnavi-api-service/issues/32)의 별도 변경으로 테스트 보조 코드·회귀 테스트·이 기록만 포함한다. 선행 [Spring PR #31](https://github.com/MagNavi-server/magnavi-api-service/pull/31)은 머지됐으며, 그 CI 결과와 이번 수정의 로컬·CI 검증 결과를 구분한다.

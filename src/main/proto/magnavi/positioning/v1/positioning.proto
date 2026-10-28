@@ -1,3 +1,4 @@
+// 메시지 형식의 패키지 v1은 유지한다. 동작 계약 contract_version=2는 첫 샘플부터 예측한다.
 syntax = "proto3";
 package magnavi.positioning.v1;
 option java_package = "com.example.magnavi_springserver.positioning.grpc.v1";
@@ -42,7 +43,7 @@ message SensorSample {
   Vector3 orientation = 4;
 }
 
-// ready 이후 각 입력에 warming_up 또는 prediction을 정확히 하나씩 같은 순서로 보낸다.
+// 계약 2에서는 ready 이후 첫 입력부터 prediction을 정확히 하나씩 같은 순서로 보낸다.
 // 치명적 실패는 gRPC 상태 코드로 호출을 종료하며 내부 오류 원문은 보내지 않는다.
 message StreamEvent {
   string session_id = 1;
@@ -53,7 +54,7 @@ message StreamEvent {
   }
 }
 
-// 요청한 모델·버전·센서 규격과 정확히 일치해야 한다. v1의 윈도우는 16이다.
+// 계약 버전 2와 요청한 모델·센서 규격이 일치해야 한다. required_count=16은 필터 윈도우 크기다.
 message StreamReady {
   uint32 contract_version = 1;
   string model_key = 2;
@@ -62,7 +63,7 @@ message StreamReady {
   uint32 required_count = 5;
 }
 
-// 1~15번째 입력은 준비 중이다. 누락된 입력을 숨기거나 중간에 윈도우를 리셋하지 않는다.
+// 기존 필드 번호 보존용 메시지다. 계약 2 서버는 warming_up을 보내지 않으며 클라이언트도 거절한다.
 message WarmingUp {
   optional int64 sequence = 1;
   uint32 buffered_count = 2;
@@ -75,7 +76,7 @@ message Candidate {
   optional double score = 2;
 }
 
-// 16번째부터 입력마다 예측한다. 후보는 점수 내림차순 1~3개이며 첫 후보가 최상위다.
+// 계약 2는 첫 입력부터 pad 정책으로 예측한다. 후보는 점수 내림차순 1~3개이며 첫 후보가 최상위다.
 message Prediction {
   optional int64 sequence = 1;
   string model_key = 2;

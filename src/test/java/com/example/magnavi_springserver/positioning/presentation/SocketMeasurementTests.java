@@ -34,7 +34,7 @@ import com.example.magnavi_springserver.positioning.infrastructure.PositioningWe
 /** 실제 네트워크에서 재현하기 어려운 종료 경합·느린 소비자를 제어 가능한 대역으로 검증한다. */
 class SocketMeasurementTests {
     private static final String START = """
-            {"type":"start","contractVersion":1,"modelKey":"a","modelVersion":"v1","sensorProfileId":"synthetic-v1"}
+            {"type":"start","contractVersion":2,"modelKey":"a","modelVersion":"v1","sensorProfileId":"synthetic-v1"}
             """;
     private static final String SENSOR = """
             {"type":"sensor","sequence":1,"elapsedNanos":0,"magnetic":{"x":0,"y":0,"z":0},"orientation":{"x":0,"y":0,"z":0}}

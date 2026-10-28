@@ -1,8 +1,8 @@
 # 모델 gRPC 계약과 Spring 클라이언트 — 6단계
 
-구현일: 2026-09-29 · 범위: Spring 내부 호출과 합성 모델 서버 검증
+최초 구현: 2026-09-29 · 후속 변경: 2026-10-28 · 현재 계약 버전: 2
 
-6단계는 Spring이 모델 서비스와 센서·결과를 주고받는 기능이다. 앱 WebSocket·인증·사용자별 연결 관리는 7단계, 실제 Python 모델 연동·성능 측정은 8단계다. Python 저장소와 기존 HTTP `/predict`는 이번에 수정하지 않았다. 5단계 교통 신규 등록·조건부 외부 즐겨찾기는 사용자 결정에 따라 보류했다.
+6단계는 Spring이 모델 서비스와 센서·결과를 주고받는 기능이다. 앱 WebSocket·인증·사용자별 연결 관리는 7단계, 실제 Python 모델 연동·성능 측정은 8단계다. 2026-10-28에는 Python gRPC 구현과 함께 초기 응답 규칙을 갱신했다. 기존 HTTP `/predict` 응답은 유지한다. 5단계 교통 신규 등록·조건부 외부 즐겨찾기는 사용자 결정에 따라 보류했다.
 
 ## 1. 실제 구현과 호출 흐름
 
@@ -12,19 +12,19 @@ PositioningSessionService.open(modelKey, modelVersion)
   → 재사용 채널에서 PredictStream 호출
   → start 전송 → ready 확인
   → send(SensorSample)로 연속 전송
-  → next(Duration)로 ready / warming_up / prediction 읽기
+  → next(Duration)로 ready / prediction 읽기
   → prediction만 place의 ModelLocationQueryService로 최상위 장소 조회
   → PositioningResult 반환
   → close() 시 gRPC 취소·대기열 정리
 ```
 
-6단계에서는 내부 Java 기능을 구현했다. 2026-10-15의 7단계에서 이 기능을 사용하는 [인증된 앱 WebSocket](POSITIONING_WEBSOCKET.md)을 추가했으며 기본 비활성이다. 테스트용 모델은 Java JUnit 안에서 루프백 TCP 서버로 실행한다. 고정된 합성 응답만 반환하며 실제 Python 추론을 검증한 것은 아니다.
+6단계에서는 내부 Java 기능을 구현했다. 2026-10-15의 7단계에서 이 기능을 사용하는 [인증된 앱 WebSocket](POSITIONING_WEBSOCKET.md)을 추가했으며 기본 비활성이다. 테스트용 모델은 Java JUnit 안에서 루프백 TCP 서버로 실행한다. 기존 대역 검증과 별도로 `PythonModelIntegrationTests`가 실제 Python 서버를 띄워 기존 144개 예측 결과를 비교한다. 실행 방법은 아래 추가 절을 따른다.
 
 ## 2. 규격의 단일 원본과 생성
 
 - 원본: [positioning.proto](../../src/main/proto/magnavi/positioning/v1/positioning.proto).
 - 서비스: `magnavi.positioning.v1.PositioningService/PredictStream`.
-- 계약 버전: `1`. 패키지의 `v1`은 통신 규격이며 학습 모델 버전과 별개다.
+- 동작 계약 버전: `2`. 메시지 필드 번호·서비스 경로는 그대로여서 protobuf 패키지 `v1`은 유지한다. 초기 대기 의미가 달라 이전 계약 1은 거절한다. 학습 모델 버전과는 별개다.
 - `./gradlew generateProto` 또는 `./gradlew build`가 Java 메시지와 비동기 stub을 생성한다.
 - 생성물은 `build/generated/sources/proto/` 아래에만 두며 직접 수정하거나 Git에 올리지 않는다.
 - 생성기 버전은 기존 Spring Boot BOM의 `protobuf-java.version`·`grpc-java.version`을 사용한다. 이번 환경에서는 protobuf/protoc 4.35.1, gRPC/Java 생성기 1.83.1이다. Boot·Java·protobuf Gradle 플러그인 버전은 변경하지 않았다.
@@ -38,25 +38,25 @@ PositioningSessionService.open(modelKey, modelVersion)
 | 시작 필드 | 의미 |
 |---|---|
 | session_id | Spring이 생성한 UUID. 회원 ID·기기 ID가 아니다 |
-| contract_version | 통신 규격 버전 1 |
+| contract_version | 첫 샘플 예측 계약 버전 2 |
 | model_key, model_version | 이번 연결에서 사용할 모델 묶음과 버전 |
 | sensor_profile_id | 양쪽이 합의한 단위·축·방향 표현·샘플 주기 규격 ID |
 
-`ready`에는 요청한 모델·버전·프로필·계약 버전이 그대로 있어야 하고 `required_count=16`이어야 한다. 이 값이 다르면 `PROTOCOL_ERROR`로 취소한다.
+`ready`에는 요청한 모델·버전·프로필·계약 버전이 그대로 있어야 하고 `required_count=16`이어야 한다. 이 값이 다르면 `PROTOCOL_ERROR`로 취소한다. 16은 필터 윈도우 크기이며 응답을 기다릴 샘플 수가 아니다.
 
 **실제 앱·학습 데이터의 단위와 축은 아직 확인되지 않았다.** `synthetic-v1`은 테스트에서만 쓰는 가상의 규격이며 실제 센서 의미를 보증하지 않는다. 서버 설정은 기본 비활성이고 프로필도 비어 있다. 임의의 프로필 이름을 적는 것만으로 앱 규격 확인이 끝나지는 않는다. Python은 지원하지 않는 프로필을 `FAILED_PRECONDITION`으로 거절해야 한다. 실제 단위·주파수·모델 파일 조합을 확인하고 같은 프로필 문서를 공유한 뒤 활성화한다.
 
 ## 4. 샘플과 응답 규칙
 
-| 항목 | v1 규칙 |
+| 항목 | 계약 v2 규칙 |
 |---|---|
 | sequence | 1부터 연속 증가하는 양의 int64. 누락·중복·역순은 연결 종료 |
 | elapsed_nanos | 같은 기기의 단조 시계로 측정한 첫 샘플 이후 경과 시간. 첫 샘플 0, 이후 증가. 서버 시각과 차이를 계산하지 않음 |
 | magnetic, orientation | 각각 x·y·z 3개 유한 실수. Java에서는 벡터 전체 누락·NaN·무한대를 거절 |
 | protobuf 필수 값 | optional로 수치 누락과 정상 값 0을 구분. Python 구현도 has/presence 확인 필요 |
-| 준비 중 | 1~15번째 입력마다 같은 sequence, buffered_count=sequence, required_count=16 반환 |
-| 예측 | 16번째부터 입력마다 같은 sequence의 prediction 하나 반환 |
-| 결과 순서 | 센서 하나당 준비 중 또는 예측 하나. 보낸 순서대로 반환하고 임의 생략·윈도우 리셋 금지 |
+| 준비 중 | `warming_up`을 받으면 규격 오류. protobuf 메시지는 필드 호환성을 위해 보존 |
+| 예측 | 첫 번째부터 입력마다 같은 sequence의 prediction 하나 반환. Python의 기존 pad 계산 유지 |
+| 결과 순서 | 센서 하나당 예측 하나. 보낸 순서대로 반환하고 임의 생략·윈도우 리셋 금지 |
 | 위치 코드 | 문자열 그대로 사용. `007`과 `7`, 대소문자·앞뒤 공백을 정규화하지 않음 |
 | 후보 | 점수 내림차순 1~3개, 중복 코드 없음. 첫 후보와 최상위 코드·점수 일치 |
 | 점수 | 유한한 0~1 값. 실제 위치 정확도가 보장된 확률로 표현하지 않음 |
@@ -67,7 +67,7 @@ PositioningSessionService.open(modelKey, modelVersion)
 
 `PositioningConnection.next(wait)`는 gRPC 수신 콜백 밖의 호출자 스레드에서 동작한다. 읽기 소비자는 연결마다 하나로 제한한다. 이후 WebSocket 구현에서는 이 메서드를 gRPC 콜백이나 전체 사용자가 공유하는 수신 스레드에서 호출하지 않고 제한된 실행 구조에 연결해야 한다.
 
-- `ready`·`warming_up`: `mappingStatus=NOT_REQUESTED`, `location=null`.
+- `ready`: `mappingStatus=NOT_REQUESTED`, `location=null`. v2에서는 워밍업 응답이 업무 계층으로 전달되지 않는다.
 - 매핑 성공: `mappingStatus=FOUND`, 최상위 장소의 건물·층·이름 포함.
 - 매핑 누락·비활성 장소: `mappingStatus=NOT_FOUND`, `location=null`. 다른 모델·버전이나 숫자 장소 ID로 대체하지 않는다.
 - 후보 목록은 원래 코드·점수로 반환하고 후보별 DB 조회를 추가하지 않는다.
@@ -119,11 +119,11 @@ gRPC 오류 description·원인·trailer는 업무 예외에 전달하지 않는
 
 ## 8. 검증과 남은 작업
 
-Java 21에서 `./gradlew clean build --console=plain`을 실행해 기존 170개와 신규 gRPC 48개, 총 218개 테스트 및 실행 JAR 빌드가 통과했다. 실패·오류·건너뜀은 0이다.
+최초 6단계(2026-09-29)에는 Java 21의 `./gradlew clean build --console=plain`으로 기존 170개와 신규 gRPC 48개, 총 218개 테스트 및 실행 JAR 빌드를 통과했다. 실패·오류·건너뜀은 0이었다. 아래 검증 항목 중 초기 응답 규칙은 2026-10-28 계약 v2에 맞춰 갱신했으며 최신 전체 결과는 9장을 따른다.
 
 검증한 항목:
 
-- 실제 루프백 gRPC 전송, 0의 optional presence, ready·15회 워밍업·16번째 이후 예측.
+- 실제 루프백 gRPC 전송, 0의 optional presence, ready·첫 샘플부터 예측 및 1·15·16번째 경계.
 - 순번·시간·모델·버전·세션·점수·후보 오류와 원격 오류 비노출.
 - 두 동시 스트림의 독립 결과, 연결/입력/결과 한도, 준비·응답·유휴 시간 초과.
 - 취소의 서버 전달, 대기 읽기 해제, 늦은 결과 격리, 종료 후 새 호출 차단.
@@ -133,9 +133,35 @@ Java 21에서 `./gradlew clean build --console=plain`을 실행해 기존 170개
 미검증·후속:
 
 - 실제 앱·학습 데이터의 센서 단위·축·주파수·상대 시간 생성, 실제 모델 프로필.
-- Python 생성 코드·모델 서버 구현 및 동일 입력의 추론 회귀.
-- 앱 WebSocket 인증·사용자별 연결 한도·재접속·결과 표시.
+- 실제 센서·Linux 환경의 Python 모델 호환성과 수치 경고 해소. 로컬 생성 코드·서버·144개 합성 회귀는 2026-10-28 검증했다.
+- 실제 앱의 WebSocket v2 적용·센서 전송·결과 표시(서버 인증·한도·재접속은 기존 구현).
 - 실제 모델 부하·성능, 운영 서비스 인증·TLS/mTLS·배포.
 - 교통 신규 등록·외부 즐겨찾기·기존 데이터 이관.
 
 참고: [gRPC 기본 개념](https://grpc.io/docs/what-is-grpc/core-concepts/), [protobuf Gradle 플러그인](https://github.com/google/protobuf-gradle-plugin). API의 실제 콜백 제약은 현재 사용 중인 gRPC Java 소스와 컴파일·통합 테스트로 확인했다.
+
+## 9. 계약 v2와 실제 Python 검증(2026-10-28)
+
+초기 15개 대기 강제를 제거하고 첫 샘플 예측을 받는다. 원본 proto·Python 사본·생성 코드와
+Spring 입력/응답 검증을 같이 갱신했다. Python은 [PR #6](https://github.com/MagNavi-server/magnavi-positioning-service/pull/6)으로 반영됐고 대응 Spring 변경을 이 PR에 포함한다. 이전 계약 1은 거절한다.
+현재 Python 모델의 정수 위치 코드는 전송 경계에서 문자열이 된다. 실제 코드에 앞자리 0이 없는지
+Python 시작 단계에서 검사하며 Spring은 받은 문자열을 변환하지 않는다. 운영 DB 매핑 등록은 후속이다.
+
+Java 21에서 아래 명령을 실행해 269개 테스트·실행 JAR 빌드가 통과했다(실패·오류·건너뜀 0).
+기존 테스트는 격리 MySQL·Java 대역을 사용하고 추가 1개는 실제 Python 모델의 144개 결과를 비교했다.
+
+```bash
+MAGNAVI_PYTHON_ROOT=/Users/ychoik/back_fastapi_my ./gradlew test build --no-daemon
+```
+
+위 절대 경로는 이번 검증 환경 예시이므로 각 환경의 Python 저장소 경로로 바꾼다.
+Python 쪽 `build/streaming-venv`와 `build/generated`를 먼저 준비해야 한다.
+환경 변수 미지정 시 실제 Python 테스트는 건너뛴다. 의도적으로 다시 검증할 때는
+`--tests '*PythonModelIntegrationTests' --rerun-tasks`를 사용한다. 운영 DB·앱·배포는 변경하지 않았다.
+
+Python [계약·실행 안내](https://github.com/MagNavi-server/magnavi-positioning-service/blob/c41e0a86d6c2b407f91b1230a191eee487096a15/docs/api/GRPC_CONTRACT.md)와
+[트러블슈팅](https://github.com/MagNavi-server/magnavi-positioning-service/blob/c41e0a86d6c2b407f91b1230a191eee487096a15/docs/troubleshooting/grpc-first-prediction.md)에 원인·해결·검증·한계를 기록했다.
+Spring 게시 후 Python lock의 원본 커밋 표시는 별도 갱신이 필요하다. 현재 사본의 내용·해시는 동일하다.
+부하 성능 개선이나 실제 위치 정확도를 입증한 결과는 아니다.
+
+게시 준비 중 확인(2026-10-28): 첫 전체 실행은 269개 중 기존 WebSocket 바이너리 거절 테스트의 정리 단계에서 1개 실패했다. 오류 응답·모델 취소 확인 이후 `Probe.close()`의 `sendClose()`가 `Output closed`를 반환했다. 동일 코드의 WebSocket 모음 재실행과 전체 `test build --rerun-tasks` 재검증에서 269개 모두 통과하고 JAR 빌드가 성공했다(실패·오류·건너뜀 0). 종료 콜백과 테스트의 정리 요청 사이 경합 가능성은 남아 있다. 테스트 보조 코드의 보완은 이번 계약 게시에 섞지 않았다.

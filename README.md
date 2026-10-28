@@ -170,3 +170,7 @@ Testcontainers는 테스트용 MySQL을 임시 포트로 실행하고 종료 시
 - [DB 스키마 설계](DATABASE_SCHEMA.md)
 - [모듈 안내서](docs/modules/README.md)
 - [공통 지원 영역](docs/modules/SHARED.md)
+
+### 2026-10-28 모델 계약 v2 로컬 연동
+
+첫 샘플부터 예측하는 기존 Python 동작에 맞춰 gRPC·WebSocket 계약 버전을 2로 변경했다. 실제 Java–Python 호출에서 기존 144개 예측 결과가 일치했고 전체 269개 테스트(실패·오류·건너뜀 0)와 빌드가 통과했다. [실행·전환 안내](docs/api/MODEL_GRPC.md#9-계약-v2와-실제-python-검증2026-10-28)를 참고한다. 운영 기능은 기본 비활성이며 앱 v2 전환·실제 센서·TLS·부하 측정은 후속이다.

@@ -113,7 +113,7 @@ class PositioningMappingIntegrationTests {
             for (int i = 1; i <= 16; i++) {
                 connection.send(new SensorSample(i, (i - 1) * 100, vector, vector));
                 result = connection.next(Duration.ofSeconds(3)).orElseThrow();
-                if (i < 16) assertThat(result.mappingStatus()).isEqualTo(PositioningResult.MappingStatus.NOT_REQUESTED);
+                assertThat(result.event()).isInstanceOf(ModelEvent.Prediction.class);
             }
             return result;
         }

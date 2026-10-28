@@ -1,8 +1,8 @@
 # 앱 WebSocket과 모델 gRPC 연결 — 7단계
 
-구현일: 2026-10-15 · 상태: Spring 로컬 구현·테스트, 운영 기본 비활성
+구현일: 2026-10-15 · 계약 v2 변경: 2026-10-28 · 상태: Spring 로컬 구현·테스트, 운영 기본 비활성
 
-앱이 센서 한 개씩 보내면 Spring이 그 연결의 모델 스트림으로 전달하고 결과를 돌려준다. 위치 계산과 최근 16개 센서 관리는 Python의 역할이며 Spring에서 중복 계산하지 않는다. 실제 Python·모바일 앱 전환·운영 WSS 연결은 아직 검증하지 않았다.
+앱이 센서 한 개씩 보내면 Spring이 그 연결의 모델 스트림으로 전달하고 결과를 돌려준다. 위치 계산과 최근 16개 센서 관리는 Python의 역할이며 Spring에서 중복 계산하지 않는다. Java gRPC 클라이언트와 실제 Python 모델의 144개 결과 비교는 검증했다. 실제 모바일 앱부터 WebSocket·Python까지의 종단 전환과 운영 WSS 연결은 후속이다.
 
 ## 1. 연결과 인증
 
@@ -22,7 +22,7 @@
 ### ① 앱 → 시작 요청
 
 ```json
-{"type":"start","contractVersion":1,"modelKey":"model-a","modelVersion":"v1","sensorProfileId":"synthetic-v1"}
+{"type":"start","contractVersion":2,"modelKey":"model-a","modelVersion":"v1","sensorProfileId":"synthetic-v1"}
 ```
 
 서버에 설정한 센서 프로필과 같아야 한다. 모델 키·버전·프로필은 모델 서비스에서도 확인한다. 한 연결에서 `start`는 한 번만 가능하며 모델을 바꾸려면 새 연결을 연다.
@@ -30,7 +30,7 @@
 ### ② 서버 → 준비 완료
 
 ```json
-{"type":"ready","sessionId":"측정마다 생성한 UUID","contractVersion":1,"modelKey":"model-a","modelVersion":"v1","sensorProfileId":"synthetic-v1","requiredCount":16}
+{"type":"ready","sessionId":"측정마다 생성한 UUID","contractVersion":2,"modelKey":"model-a","modelVersion":"v1","sensorProfileId":"synthetic-v1","requiredCount":16}
 ```
 
 **이 응답을 받은 뒤 센서를 보낸다.** WebSocket 연결 성공만으로 모델 준비가 끝난 것은 아니다.
@@ -50,17 +50,15 @@
 
 필수값 누락·추가 필드·중복 키·숫자 문자열·정수 필드의 소수·64비트 정수 범위 초과를 거절한다. 단위와 축의 물리적 의미·주파수는 별도의 센서 프로필로 확정해야 한다. 서버가 임의로 단위·축을 바꾸지 않는다.
 
-### ④ 서버 → 워밍업 또는 예측
+### ④ 서버 → 첫 샘플부터 예측
+
+계약 v2는 처음 15개에도 예측한다. `requiredCount=16`은 Python 필터의 윈도우 크기다. 기존 v1 앱은 start의 버전과 초기 응답 처리를 함께 갱신해야 하며 서버는 v1을 거절한다.
 
 ```json
-{"type":"warming_up","sessionId":"측정 ID","sequence":1,"bufferedCount":1,"requiredCount":16}
+{"type":"prediction","sessionId":"측정 ID","sequence":1,"modelKey":"model-a","modelVersion":"v1","locationCode":"007","score":0.8,"candidates":[{"locationCode":"007","score":0.8}],"mappingStatus":"NOT_FOUND","location":null}
 ```
 
-```json
-{"type":"prediction","sessionId":"측정 ID","sequence":16,"modelKey":"model-a","modelVersion":"v1","locationCode":"007","score":0.8,"candidates":[{"locationCode":"007","score":0.8}],"mappingStatus":"NOT_FOUND","location":null}
-```
-
-워밍업은 아직 위치 예측이 아니다. `locationCode`는 문자열이며 `007`을 숫자 7로 바꾸지 않는다. `score`는 모델 점수로 실제 정확도와 같은 의미가 아니다.
+`locationCode`는 문자열이며 `007`을 숫자 7로 바꾸지 않는다. `score`는 모델 점수로 실제 정확도와 같은 의미가 아니다.
 
 예측의 최상위 코드가 장소 DB에 연결되어 있으면 `mappingStatus=FOUND`와 장소 정보를 보낸다. 매핑이 없거나 장소가 비활성이면 `NOT_FOUND`, `location=null`이다. [장소 매핑 안내](MODEL_LOCATION_MAPPING.md)의 장소 응답을 그대로 사용한다. 후보 전체를 각각 DB 조회하거나 원본 센서·예측 이력을 저장하지 않는다.
 
@@ -133,8 +131,8 @@ magnavi:
 
 - [기존 예측 호출](https://github.com/midas-capston-design/front/blob/eca0611ab25f8a4d514aa9563def7945b0a0223e/lib/function/prediction_service.dart)은 HTTP `/predict`에 `Mag_X/Y/Z`, `Ori_X/Y/Z`를 보낸다. 실내 지도 화면은 약 2초마다 호출하며 새 WebSocket과 자동 호환되지 않는다.
 - [센서 처리](https://github.com/midas-capston-design/front/blob/eca0611ab25f8a4d514aa9563def7945b0a0223e/lib/function/sensor_controller.dart)는 자기장 축을 전달하고 방향에 heading, 음수 pitch, roll을 사용한다. 단위·축 방향·보정·전송 주기를 모델 학습 조건과 대조해야 한다. 2초 HTTP 주기는 센서 수집 주파수가 검증됐다는 의미가 아니다.
-- 앱 변경 시 인증 헤더 연결 → start → ready 대기 → 순번/경과 시간을 붙인 개별 sensor 전송 → 워밍업/예측 구분 → 종료·재접속 처리가 필요하다. 기존 결과의 숫자 코드·후보 문자열 배열과 새 JSON의 차이도 반영해야 한다.
-- 실제 Python의 동일 gRPC 계약 구현·세션별 윈도우, 실제 앱·모델 종단 검증, WSS 및 운영 부하 검증은 후속 단계다. 이 문서의 테스트 성공을 모델 정확도 검증으로 해석하지 않는다.
+- 앱 변경 시 인증 헤더 연결 → start → ready 대기 → 순번/경과 시간을 붙인 개별 sensor 전송 → 첫 샘플부터 예측 수신 → 종료·재접속 처리가 필요하다. 기존 결과의 숫자 코드·후보 문자열 배열과 새 JSON의 차이도 반영해야 한다.
+- Python gRPC 계약 v2·세션별 윈도우는 [Python PR #6](https://github.com/MagNavi-server/magnavi-positioning-service/pull/6)으로 반영했다. 실제 앱·모델 종단 검증, WSS 및 운영 부하 검증은 후속 단계다. 이 문서의 테스트 성공을 모델 정확도 검증으로 해석하지 않는다.
 
 ## 6. 검증 방법
 
@@ -148,4 +146,4 @@ Docker를 켜고 Spring 저장소에서 실행한다. 테스트는 격리 MySQL�
 ./gradlew clean build --console=plain
 ```
 
-실제 WebSocket 테스트는 JWT 실패·만료, 쿼리 토큰/출처 차단, 센서 전달·워밍업·장소 매핑, 연결 격리·재접속, 정상 종료·취소, 잘못된 순번·프로필·바이너리·과도한 크기·유휴를 확인한다. 별도 제어 가능한 대역으로 연결 생성 중 종료·느린 쓰기·늦은 DB 결과·슬롯 반납·송신 바이트 한도를 검증한다. 최신 전체 테스트 결과는 [README](../../README.md)에 기록한다.
+실제 WebSocket 테스트는 JWT 실패·만료, 쿼리 토큰/출처 차단, 센서 전달·즉시 예측·장소 매핑, 연결 격리·재접속, 정상 종료·취소, 잘못된 순번·프로필·바이너리·과도한 크기·유휴를 확인한다. 별도 제어 가능한 대역으로 연결 생성 중 종료·느린 쓰기·늦은 DB 결과·슬롯 반납·송신 바이트 한도를 검증한다. 최신 전체 테스트 결과는 [README](../../README.md)에 기록한다.

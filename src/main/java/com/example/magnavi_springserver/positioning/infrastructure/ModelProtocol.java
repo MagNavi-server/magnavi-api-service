@@ -10,9 +10,9 @@ import com.example.magnavi_springserver.positioning.grpc.v1.StreamEvent;
 import com.example.magnavi_springserver.positioning.grpc.v1.StreamRequest;
 import com.example.magnavi_springserver.positioning.grpc.v1.Vector3;
 
-/** protobuf 변환과 v1 응답 검증을 모은다. 모델 입력을 보정하거나 값을 추측하지 않는다. */
+/** 기존 protobuf 형식에 동작 계약 2를 적용한다. 첫 입력부터 예측하며 센서를 보정하지 않는다. */
 final class ModelProtocol {
-    static final int VERSION = 1;
+    static final int VERSION = 2;
     static final int WINDOW_SIZE = 16;
 
     /** 상태가 없는 변환 도구는 인스턴스로 만들지 않는다. */
@@ -52,16 +52,9 @@ final class ModelProtocol {
         return new ModelEvent.Ready(WINDOW_SIZE);
     }
 
-    /** 입력마다 한 응답이라는 v1 약속과 워밍업·예측 필드를 검사한다. */
+    /** 계약 2는 첫 입력부터 예측 하나를 요구하며 초기 대기 응답도 규격 오류로 거절한다. */
     static ModelEvent result(StreamEvent event, long expectedSequence, String modelKey, String version) {
-        if (event.hasWarmingUp()) {
-            var warming = event.getWarmingUp();
-            require(warming.hasSequence() && warming.getSequence() == expectedSequence
-                    && expectedSequence < WINDOW_SIZE && warming.getBufferedCount() == expectedSequence
-                    && warming.getRequiredCount() == WINDOW_SIZE);
-            return new ModelEvent.WarmingUp(expectedSequence, warming.getBufferedCount(), WINDOW_SIZE);
-        }
-        require(event.hasPrediction() && expectedSequence >= WINDOW_SIZE);
+        require(event.hasPrediction() && expectedSequence >= 1);
         var prediction = event.getPrediction();
         require(prediction.hasSequence() && prediction.getSequence() == expectedSequence
                 && prediction.getModelKey().equals(modelKey) && prediction.getModelVersion().equals(version)

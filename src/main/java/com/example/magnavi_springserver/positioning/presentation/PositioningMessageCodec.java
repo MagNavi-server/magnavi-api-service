@@ -18,7 +18,7 @@ import com.example.magnavi_springserver.positioning.domain.PositioningException;
 import com.example.magnavi_springserver.positioning.domain.PositioningException.Reason;
 import com.example.magnavi_springserver.positioning.domain.SensorSample;
 
-/** WebSocket v1 JSON과 기존 업무 객체 사이를 변환한다. 입력값을 오류 메시지에 되돌리지 않는다. */
+/** 첫 샘플부터 예측하는 WebSocket v2 JSON을 변환하며 입력값을 오류에 되돌리지 않는다. */
 public final class PositioningMessageCodec {
     private final JsonMapper json = JsonMapper.builder(JsonFactory.builder()
                     .streamReadConstraints(StreamReadConstraints.builder()
@@ -50,7 +50,7 @@ public final class PositioningMessageCodec {
             return switch (type) {
                 case "start" -> {
                     fields(root, "type", "contractVersion", "modelKey", "modelVersion", "sensorProfileId");
-                    if (integer(root, "contractVersion") != 1) throw invalid();
+                    if (integer(root, "contractVersion") != 2) throw invalid();
                     yield new Start(identifier(root, "modelKey", 128), identifier(root, "modelVersion", 64),
                             identifier(root, "sensorProfileId", 64));
                 }
@@ -77,7 +77,7 @@ public final class PositioningMessageCodec {
         output.put("sessionId", sessionId);
         if (result.event() instanceof ModelEvent.Ready ready) {
             output.put("type", "ready");
-            output.put("contractVersion", 1);
+            output.put("contractVersion", 2);
             output.put("modelKey", start.modelKey());
             output.put("modelVersion", start.modelVersion());
             output.put("sensorProfileId", start.sensorProfileId());

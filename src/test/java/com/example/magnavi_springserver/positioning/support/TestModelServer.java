@@ -98,7 +98,7 @@ public final class TestModelServer implements AutoCloseable {
             response.setOnCancelHandler(this::cancelled);
         }
 
-        /** 처음에는 ready를, 이후에는 15회 워밍업과 16번째부터 예측을 돌려준다. */
+        /** 처음에는 ready를, 첫 샘플부터 예측을 돌려준다. */
         @Override
         public synchronized void onNext(StreamRequest request) {
             if (request.hasStart()) {
@@ -119,22 +119,17 @@ public final class TestModelServer implements AutoCloseable {
             if (mode == Mode.COMPLETE) { response.onCompleted(); return; }
             if (request.hasStart()) {
                 if (mode != Mode.NO_READY) emit(StreamEvent.newBuilder().setSessionId(start.getSessionId())
-                        .setReady(StreamReady.newBuilder().setContractVersion(1).setModelKey(start.getModelKey())
+                        .setReady(StreamReady.newBuilder().setContractVersion(2).setModelKey(start.getModelKey())
                                 .setModelVersion(start.getModelVersion()).setSensorProfileId(start.getSensorProfileId())
                                 .setRequiredCount(16)).build());
             } else if (mode != Mode.NO_RESULTS && mode != Mode.NO_READY) {
                 long sequence = request.getSample().getSequence();
                 var event = StreamEvent.newBuilder().setSessionId(start.getSessionId());
-                if (sequence < 16) {
-                    event.setWarmingUp(WarmingUp.newBuilder().setSequence(sequence)
-                            .setBufferedCount((int) sequence).setRequiredCount(16));
-                } else {
-                    event.setPrediction(Prediction.newBuilder().setSequence(sequence)
-                            .setModelKey(start.getModelKey()).setModelVersion(start.getModelVersion())
-                            .setLocationCode("007").setScore(0.8)
-                            .addCandidates(Candidate.newBuilder().setLocationCode("007").setScore(0.8))
-                            .addCandidates(Candidate.newBuilder().setLocationCode("008").setScore(0.2)));
-                }
+                event.setPrediction(Prediction.newBuilder().setSequence(sequence)
+                        .setModelKey(start.getModelKey()).setModelVersion(start.getModelVersion())
+                        .setLocationCode("007").setScore(0.8)
+                        .addCandidates(Candidate.newBuilder().setLocationCode("007").setScore(0.8))
+                        .addCandidates(Candidate.newBuilder().setLocationCode("008").setScore(0.2)));
                 emit(event.build());
             }
         }

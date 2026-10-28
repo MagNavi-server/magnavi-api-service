@@ -97,7 +97,7 @@ class PositioningWebSocketIntegrationTests {
         assertThat(handler.activeConnections()).isZero();
     }
 
-    /** 앱 JSON이 실제 gRPC로 전달되고 준비·워밍업·장소 매핑 결과가 같은 연결로 돌아온다. */
+    /** 앱 JSON이 실제 gRPC로 전달되고 준비·첫 샘플부터 장소 매핑 결과가 같은 연결로 돌아온다. */
     @Test void relaysSensorsAndMappedPrediction() throws Exception {
         var building = buildings.save(new Building("합성 WS 건물", "합성 주소"));
         var floor = floors.save(new Floor(building.getId(), 1, "1층"));
@@ -114,8 +114,7 @@ class PositioningWebSocketIntegrationTests {
                 JsonNode result = socket.next();
                 assertThat(result.get("sessionId").asString()).isEqualTo(sessionId);
                 assertThat(result.get("sequence").asLong()).isEqualTo(sequence);
-                if (sequence < 16) assertThat(result.get("type").asString()).isEqualTo("warming_up");
-                else {
+                {
                     assertThat(result.get("type").asString()).isEqualTo("prediction");
                     assertThat(result.get("locationCode").asString()).isEqualTo("007");
                     assertThat(result.get("mappingStatus").asString()).isEqualTo("FOUND");
@@ -296,7 +295,7 @@ class PositioningWebSocketIntegrationTests {
 
     /** 센서 의미를 보증하지 않는 테스트용 모델·프로필을 지정한다. */
     private String start(String model, String version) {
-        return JSON.writeValueAsString(java.util.Map.of("type", "start", "contractVersion", 1,
+        return JSON.writeValueAsString(java.util.Map.of("type", "start", "contractVersion", 2,
                 "modelKey", model, "modelVersion", version, "sensorProfileId", "synthetic-v1"));
     }
 

@@ -44,22 +44,19 @@ class GrpcModelStreamClientTests {
         if (server != null) server.close();
     }
 
-    /** 실제 0의 presence와 15회 준비 중·16번째 예측·원래 코드 보존을 확인한다. */
+    /** 실제 0의 presence와 1·15·16번째를 포함한 즉시 예측·원래 코드 보존을 확인한다. */
     @Test
-    void streamsZeroValuesWarmupAndPredictions() throws Exception {
+    void streamsZeroValuesAndImmediatePredictions() throws Exception {
         start(Mode.NORMAL, Status.UNKNOWN, UnaryOperator.identity(), 32, 32, Duration.ofSeconds(5));
         try (var stream = openReady()) {
             for (int i = 1; i <= 17; i++) {
                 stream.send(sample(i));
                 var event = stream.next(WAIT).orElseThrow();
-                if (i < 16) assertThat(event).isEqualTo(new ModelEvent.WarmingUp(i, i, 16));
-                else {
-                    var prediction = (ModelEvent.Prediction) event;
-                    assertThat(prediction.locationCode()).isEqualTo("007");
-                    assertThat(prediction.sequence()).isEqualTo(i);
-                    assertThat(prediction.candidates()).hasSize(2);
-                    assertThat(prediction.toString()).doesNotContain("007", "0.8");
-                }
+                var prediction = (ModelEvent.Prediction) event;
+                assertThat(prediction.locationCode()).isEqualTo("007");
+                assertThat(prediction.sequence()).isEqualTo(i);
+                assertThat(prediction.candidates()).hasSize(2);
+                assertThat(prediction.toString()).doesNotContain("007", "0.8");
             }
             var sent = server.requests(stream.sessionId());
             assertThat(sent).hasSize(18);
@@ -237,7 +234,7 @@ class GrpcModelStreamClientTests {
     /** 핸드셰이크의 각 식별자와 필수 payload 누락을 독립적으로 검사한다. */
     static Stream<UnaryOperator<StreamEvent>> badReadyResponses() {
         return Stream.of(e -> e.toBuilder().setSessionId("another-session").build(),
-                e -> e.toBuilder().setReady(e.getReady().toBuilder().setContractVersion(2)).build(),
+                e -> e.toBuilder().setReady(e.getReady().toBuilder().setContractVersion(1)).build(),
                 e -> e.toBuilder().setReady(e.getReady().toBuilder().setModelKey("another-model")).build(),
                 e -> e.toBuilder().setReady(e.getReady().toBuilder().setModelVersion("V1")).build(),
                 e -> e.toBuilder().setReady(e.getReady().toBuilder().setSensorProfileId("unknown")).build(),
@@ -252,14 +249,16 @@ class GrpcModelStreamClientTests {
         start(Mode.NORMAL, Status.UNKNOWN, e -> e.hasPrediction() ? mutation.apply(e) : e,
                 32, 32, Duration.ofSeconds(5));
         var stream = openReady();
-        warmup(stream);
-        stream.send(sample(16));
+        stream.send(sample(1));
         assertFailure(() -> stream.next(WAIT), Reason.PROTOCOL_ERROR);
     }
 
     /** 프로토콜 오류를 실제 네트워크 응답으로 재현한다. */
     static Stream<UnaryOperator<StreamEvent>> badPredictions() {
-        return Stream.of(e -> e.toBuilder().setPrediction(e.getPrediction().toBuilder().clearSequence()).build(),
+        return Stream.of(e -> e.toBuilder().setWarmingUp(
+                        com.example.magnavi_springserver.positioning.grpc.v1.WarmingUp.newBuilder()
+                                .setSequence(1).setBufferedCount(1).setRequiredCount(16)).build(),
+                e -> e.toBuilder().setPrediction(e.getPrediction().toBuilder().clearSequence()).build(),
                 e -> e.toBuilder().setPrediction(e.getPrediction().toBuilder().setSequence(17)).build(),
                 e -> e.toBuilder().setPrediction(e.getPrediction().toBuilder().setModelVersion("v2")).build(),
                 e -> e.toBuilder().setPrediction(e.getPrediction().toBuilder().setScore(Double.NaN)).build(),
@@ -312,7 +311,7 @@ class GrpcModelStreamClientTests {
         return stream;
     }
 
-    /** 각 스트림이 독립적으로 워밍업하고 자신의 모델 결과를 받는지 확인한다. */
+    /** 각 스트림이 첫 샘플부터 자신의 모델 결과를 받는지 확인한다. */
     private String runMeasurement(String model) {
         try (var stream = client.open(model, "v1")) {
             assertThat(stream.next(WAIT)).contains(new ModelEvent.Ready(16));
@@ -322,14 +321,6 @@ class GrpcModelStreamClientTests {
                 if (event instanceof ModelEvent.Prediction prediction) assertThat(prediction.modelKey()).isEqualTo(model);
             }
             return stream.sessionId();
-        }
-    }
-
-    /** 합성 샘플 15개를 처리해 예측 응답의 검사 위치까지 진행한다. */
-    private void warmup(ModelStream stream) {
-        for (int i = 1; i < 16; i++) {
-            stream.send(sample(i));
-            assertThat(stream.next(WAIT)).contains(new ModelEvent.WarmingUp(i, i, 16));
         }
     }
 

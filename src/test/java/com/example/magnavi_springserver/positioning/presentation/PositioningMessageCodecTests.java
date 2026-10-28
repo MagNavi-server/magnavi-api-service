@@ -31,7 +31,7 @@ class PositioningMessageCodecTests {
     /** 기존 gRPC 식별자를 임의로 정규화하지 않는다. */
     @Test void preservesIdentifiers() {
         var start = (PositioningMessageCodec.Start) codec.decode("""
-                {"type":"start","contractVersion":1,"modelKey":" 모델 01 ","modelVersion":"v1","sensorProfileId":"synthetic-v1"}
+                {"type":"start","contractVersion":2,"modelKey":" 모델 01 ","modelVersion":"v1","sensorProfileId":"synthetic-v1"}
                 """);
         assertThat(start.modelKey()).isEqualTo(" 모델 01 ");
         assertThat(codec.decode("{\"type\":\"stop\"}")).isInstanceOf(PositioningMessageCodec.Stop.class);
@@ -42,7 +42,7 @@ class PositioningMessageCodecTests {
     @ValueSource(strings = {"null", "[]", "{}", "{bad", "{\"type\":\"unknown\"}",
             "{\"type\":\"stop\",\"extra\":1}", "{\"type\":\"stop\",\"type\":\"stop\"}",
             "{\"type\":\"stop\"} {}", "{\"type\":1}",
-            "{\"type\":\"start\",\"contractVersion\":2,\"modelKey\":\"a\",\"modelVersion\":\"v1\",\"sensorProfileId\":\"x\"}"})
+            "{\"type\":\"start\",\"contractVersion\":1,\"modelKey\":\"a\",\"modelVersion\":\"v1\",\"sensorProfileId\":\"x\"}"})
     void rejectsInvalidMessages(String value) {
         assertThatThrownBy(() -> codec.decode(value)).isInstanceOf(PositioningException.class)
                 .hasMessage("INVALID_MESSAGE").hasNoCause();

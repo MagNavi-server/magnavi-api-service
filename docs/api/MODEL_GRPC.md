@@ -173,3 +173,59 @@ Spring 게시 후 Python lock의 원본 커밋 표시는 별도 갱신이 필요
 - 회귀 검증: [종료 처리 테스트](../../src/test/java/com/example/magnavi_springserver/positioning/PositioningWebSocketProbeTests.java) 7개를 추가했다. 기존 정리 코드에서는 경합 재현·오류 전파·실패 시 정리 항목 5개가 실패했고, 수정 후 7개와 기존 실제 WebSocket 통합 12개가 모두 통과했다. 테스트 재시도나 예외 무시는 추가하지 않았다.
 - 전체 검증: Java 21에서 위 Python 경로를 지정한 `./gradlew test build --no-daemon --console=plain` 실행 결과 276개 통과(실패·오류·건너뜀 0), 빌드 성공. 실제 Python 테스트 1개 안의 144개 예측 비교도 포함한다. 운영 코드·계약·의존성 변경과 부하 성능 측정은 없다.
 - 게시 범위: [이슈 #32](https://github.com/MagNavi-server/magnavi-api-service/issues/32)의 별도 변경으로 테스트 보조 코드·회귀 테스트·이 기록만 포함한다. 선행 [Spring PR #31](https://github.com/MagNavi-server/magnavi-api-service/pull/31)은 머지됐으며, 그 CI 결과와 이번 수정의 로컬·CI 검증 결과를 구분한다.
+
+
+## 10. WebSocket부터 실제 Python까지 통합 검증(2026-10-31)
+
+[PythonWebSocketIntegrationTests](../../src/test/java/com/example/magnavi_springserver/positioning/PythonWebSocketIntegrationTests.java)는
+앱을 대신하는 Java WebSocket 클라이언트 → 실제 Spring 인증·중계 → 실제 Python 모델 →
+Spring 장소 매핑 → 같은 WebSocket 응답을 한 흐름으로 확인한다. 기존 Java gRPC 클라이언트의
+144개 비교와 WebSocket의 Java 모델 대역 검증을 보완하는 로컬 테스트다.
+
+- Python 저장소의 고정 합성 입력 3종·144개와 기존 기준 결과를 읽는다. 정답을 테스트 중 다시 생성하지 않는다.
+- 첫 번째·15·16번째를 포함한 모든 샘플의 측정 ID·순번·위치 코드·후보 순서·점수를 비교한다.
+  점수 오차는 기존처럼 상대 1e-9, 절대 1e-12를 사용한다.
+- 서로 다른 회원과 같은 회원의 두 연결에서 각각 96개 입력을 교차 전송한다.
+  각 결과는 해당 입력 묶음을 독립 실행한 기존 기준값과 같아야 한다.
+- 정상 stop과 응답을 기다리지 않은 소켓 종료 뒤 같은 회원으로 재접속한다.
+  새 측정 ID·1번부터의 순번·빈 윈도우의 예측을 확인한다. Python 연결 한도 2개보다 많은
+  4회 측정을 반복하고 Spring 연결 수가 매번 0으로 돌아오는지 확인한다.
+- Testcontainers의 별도 MySQL에 합성 장소·모델 코드 매핑을 등록해 반환된 장소 ID도 확인한다.
+  인증은 테스트마다 생성한 키의 서명 JWT를 사용한다. 운영 DB·키·실제 센서 자료는 사용하지 않는다.
+
+[Python 실행 보조 클래스](../../src/test/java/com/example/magnavi_springserver/positioning/support/PythonModelTestServer.java)는
+원본 설정을 보존한 임시 사본으로 루프백·임의 포트의 DB 없는 진입점만 실행한다.
+모델·gRPC 준비 표시를 기다리고 종료 시 프로세스 종료·준비 파일 제거를 확인한다.
+[WebSocket 수신 보조 클래스](../../src/test/java/com/example/magnavi_springserver/positioning/PositioningWebSocketProbe.java)는
+기존 종료 경합 수정 코드를 옮겨 기존 대역 테스트와 실제 모델 테스트가 같이 사용한다.
+
+실행 전 Java 21·Docker와 Python 저장소의 `build/streaming-venv`, `build/generated`를 준비한다.
+Spring 저장소에서 아래 경로를 실제 Python 저장소 절대 경로로 바꿔 실행한다.
+
+```bash
+MAGNAVI_PYTHON_ROOT=/Users/ychoik/back_fastapi_my ./gradlew test --tests '*PythonWebSocketIntegrationTests' --no-daemon --console=plain --rerun-tasks
+```
+
+환경 변수가 없으면 실제 Python 테스트는 건너뛴다. 경로를 지정했는데 모델·환경이 없거나 준비에
+실패하면 테스트도 실패한다. 일반 CI의 성공을 실제 Python 검증 성공으로 해석하지 않는다.
+이번 종단 테스트의 Python 로그·임시 설정은 `build/python-websocket-test/run-*/`에서 확인한다.
+
+검증 결과(2026-10-31): 관련 테스트 24개를 먼저 통과한 뒤 아래 전체 검증에서
+280개 테스트·실행 JAR 빌드가 통과했다(실패·오류·건너뜀 0).
+추가 4개 테스트의 예측 비교는 총 528회(기준 144 + 회원 간 96 + 동일 회원 96 + 재접속 192)이며,
+기존 Java gRPC → Python 테스트의 144개 비교도 별도로 통과했다.
+처음 컴파일 시 보조 클래스 이동 후 남은 기존 이름 참조 1곳을 수정했으며 테스트 재시도·예외 무시는 추가하지 않았다.
+Python의 모델·추론 코드·합성 기준·계약·생성 도구 등 29개 비문서 파일이 게시본과 동일함도 확인했다.
+
+```bash
+MAGNAVI_PYTHON_ROOT=/Users/ychoik/back_fastapi_my ./gradlew test build --no-daemon --console=plain
+```
+
+게시 범위는 [이슈 #34](https://github.com/MagNavi-server/magnavi-api-service/issues/34)의 테스트 6개 파일·이 문서다.
+2026-11-04 게시 준비에서 중앙 `develop`이 검증 기준 `7b69b94`와 같고 테스트 소스 6개도
+2026-10-31 검증본과 동일함을 확인했다. 코드 변경이 없어 로컬 기능 테스트는 재실행하지 않았으며,
+위 280개·528회·144개 결과는 보존된 2026-10-31 실행 기록이다. Python 출처 기록 두 파일은 별도 [PR #10](https://github.com/MagNavi-server/magnavi-positioning-service/pull/10)으로 게시했다.
+운영 코드·모델·전처리·계약·의존성·기본 실행 설정은 변경하지 않는다.
+실제 휴대폰·센서 단위/축/주파수·운영 장소 매핑·TLS·Linux·배포·부하 성능은 후속 검증이다.
+늦은 결과의 특정 발생 순서를 강제로 재현하는 검사는 기존 대역 테스트가 담당하며,
+이번 실제 모델 검사는 연결 종료·재접속 흐름과 관찰한 응답의 세션·기준값 일치를 검증한다.

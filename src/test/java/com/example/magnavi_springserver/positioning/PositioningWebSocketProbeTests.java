@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(10)
 class PositioningWebSocketProbeTests {
     private final WebSocket socket = mock(WebSocket.class);
-    private final PositioningWebSocketIntegrationTests.Probe probe =
-            new PositioningWebSocketIntegrationTests.Probe(socket);
+    private final PositioningWebSocketProbe probe =
+            new PositioningWebSocketProbe(socket);
 
     /** 클라이언트가 먼저 종료하면 서버의 종료 응답까지 확인한다. */
     @Test void closesOpenConnection() throws Exception {

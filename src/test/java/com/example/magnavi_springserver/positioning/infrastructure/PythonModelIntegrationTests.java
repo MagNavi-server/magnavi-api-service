@@ -3,10 +3,8 @@ package com.example.magnavi_springserver.positioning.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
@@ -15,10 +13,10 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import com.example.magnavi_springserver.positioning.domain.ModelEvent;
 import com.example.magnavi_springserver.positioning.domain.SensorSample;
+import com.example.magnavi_springserver.positioning.support.PythonModelTestServer;
 
 /** 명시적으로 지정한 Python 저장소의 실제 모델과 통신하며 업무 DB는 사용하지 않는다. */
 @EnabledIfEnvironmentVariable(named = "MAGNAVI_PYTHON_ROOT", matches = ".+")
@@ -31,19 +29,8 @@ class PythonModelIntegrationTests {
     @Test
     void receivesAllReferencePredictionsFromActualPythonModel() throws Exception {
         Path root = Path.of(System.getenv("MAGNAVI_PYTHON_ROOT")).toAbsolutePath();
-        var config = (ObjectNode) json.readTree(root.resolve("config/positioning.synthetic.json").toFile());
-        config.put("port", 0);
-        Path configFile = temporary.resolve("config.json");
-        Files.writeString(configFile, json.writeValueAsString(config));
-        Path readyFile = temporary.resolve("ready.json");
-        var builder = new ProcessBuilder(root.resolve("build/streaming-venv/bin/python").toString(),
-                "-m", "positioning", "--config", configFile.toString(), "--ready-file", readyFile.toString())
-                .directory(root.toFile()).redirectErrorStream(true)
-                .redirectOutput(temporary.resolve("python.log").toFile());
-        builder.environment().put("PYTHONPATH", root + ":" + root.resolve("build/generated"));
-        Process process = builder.start();
-        try {
-            int port = awaitPort(process, readyFile);
+        try (var model = PythonModelTestServer.start(root, temporary, 8)) {
+            int port = model.port();
             var properties = new ModelGrpcProperties(true, "127.0.0.1", port, true, "synthetic-v1",
                     4, 32, 32, 65536, WAIT, WAIT, Duration.ofSeconds(30));
             var channel = Grpc.newChannelBuilderForAddress("127.0.0.1", port, InsecureChannelCredentials.create())
@@ -67,30 +54,7 @@ class PythonModelIntegrationTests {
                 }
                 assertThat(checked).isEqualTo(144);
             }
-        } finally {
-            process.destroy();
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                process.waitFor(5, TimeUnit.SECONDS);
-            }
         }
-    }
-
-    /** 단순 프로세스 실행이 아닌 모델·gRPC 준비 완료 표시를 제한 시간 동안 기다린다. */
-    private int awaitPort(Process process, Path readyFile) throws Exception {
-        long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
-        while (System.nanoTime() < deadline && process.isAlive()) {
-            if (Files.exists(readyFile) && Files.size(readyFile) > 0) {
-                try {
-                    JsonNode metadata = json.readTree(readyFile.toFile());
-                    if (metadata.get("ready").booleanValue()) return metadata.get("port").intValue();
-                } catch (tools.jackson.core.JacksonException incompleteWrite) {
-                    // 파일 쓰기 도중 읽은 경우 다음 반복에서 완성된 메타데이터를 확인한다.
-                }
-            }
-            Thread.sleep(25);
-        }
-        throw new AssertionError("Python 모델 준비 실패: 테스트 임시 폴더의 python.log 확인");
     }
 
     /** 합성 입력의 축 순서를 바꾸거나 단위를 변환하지 않는다. */

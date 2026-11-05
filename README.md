@@ -1,11 +1,12 @@
 # MagNavi API Service
 
-**스마트폰 센서로 추정한 실내 위치를 앱에 전달하는 Spring 백엔드입니다.**
+**회원·장소·즐겨찾기 API와 WebSocket–gRPC 중계를 담당하는 Spring 백엔드입니다.**
 
 MagNavi는 GPS로 위치를 파악하기 어려운 실내에서 자기장·방향 센서와 딥러닝으로 위치를 구분하는 프로젝트입니다. 미리 측정한 공간의 자기장 패턴을 학습해 별도의 비콘 장비 없이 동작하는 프로토타입을 개발했습니다. 이 저장소는 **회원·인증·장소·즐겨찾기와 실시간 연결 관리**를 담당하고, Python 서버는 **센서 전처리와 위치 예측**을 담당합니다.
 
 - **2025.02~2025.11:** 6명 팀 프로젝트 — 프론트엔드 3명·백엔드 3명, 팀장 및 서버·DB·AWS 인프라 담당.
 - **2026.09~현재:** 백엔드 개인 고도화 — Spring 업무 API와 Python 모델 서비스의 역할 분리, 스트리밍 연동과 회귀 검증 진행.
+- **이 저장소의 주요 구현:** JWT 인증과 본인 데이터 접근 제어, 모델 위치 코드의 장소 매핑, 측정별 실시간 연결·취소·재접속 관리, DB를 보존하는 Spring 자동 배포.
 - **주요 결과:** 프로젝트 실험의 위치 분류 정확도 72.5% → 97.3%, 기존 HTTP 예측 요청 주기 1초 → 2초, WebSocket–gRPC 연결별 격리·취소·재접속 처리 구현.
 
 [시연 영상](https://www.youtube.com/watch?v=kqR17mF1d1U) · [개발자 포트폴리오](https://app.notion.com/p/400dedc0d781803fb123c5aafc50e8b4) · [Python 저장소](https://github.com/MagNavi-server/magnavi-positioning-service) · [논문 정보](https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE12567180)
@@ -225,4 +226,4 @@ JDK 21과 Docker가 필요합니다. 로컬 DB·환경변수·JWT 키·Spring �
 | [Docker·EC2](docs/DEPLOYMENT.md) · [CI/CD](docs/CI_CD.md) | 배포 설정·실행 순서·실패 시 복구 절차 |
 | [프로젝트 개요](PROJECT_OVERVIEW.md) · [구현 계획](IMPLEMENTATION_PLAN.md) | 설계 배경과 단계별 계획. 최신 연동 검증은 위 PR·API 문서 참고 |
 
-정리 기준: **2026-11-05**, 중앙 `develop`의 PR #35 반영 상태. 본문의 이미지 5개는 제공된 포트폴리오에서 가져왔으며 [이미지 출처](docs/images/portfolio/README.md)에 정리했습니다.
+정리 기준: **2026-11-05**, 중앙 `develop`의 PR #35·#36 반영 상태. Python README와 프로젝트 소개·목차·포트폴리오 이미지를 공유하고, 이 문서에서는 Spring의 구현 과정을 더 자세히 설명합니다. 본문의 이미지 5개는 제공된 포트폴리오에서 가져왔으며 [이미지 출처](docs/images/portfolio/README.md)에 정리했습니다.
